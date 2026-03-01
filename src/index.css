@@ -1,0 +1,124 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-text-disabled: var(--text-disabled);
+
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-light: var(--brand-light);
+  --color-brand-border: var(--brand-border);
+
+  --color-success: var(--success);
+  --color-success-light: var(--success-light);
+  --color-warning: var(--warning);
+  --color-warning-light: var(--warning-light);
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+  --color-info: var(--info);
+  --color-info-light: var(--info-light);
+
+  --color-sidebar-bg: var(--sidebar-bg);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-item-active: var(--sidebar-item-active);
+  --color-sidebar-text-active: var(--sidebar-text-active);
+
+  --font-sans: 'Plus Jakarta Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+@layer base {
+  :root {
+    --background: #FFFFFF;
+    --surface: #F8F9FA;
+    --surface-hover: #F1F3F5;
+    --border: #E9ECEF;
+    --border-strong: #DEE2E6;
+
+    --text-primary: #212529;
+    --text-secondary: #495057;
+    --text-muted: #868E96;
+    --text-disabled: #ADB5BD;
+
+    --brand: #2563EB;
+    --brand-hover: #1D4ED8;
+    --brand-light: #EFF6FF;
+    --brand-border: #BFDBFE;
+
+    --success: #16A34A;
+    --success-light: #F0FDF4;
+    --warning: #D97706;
+    --warning-light: #FFFBEB;
+    --danger: #DC2626;
+    --danger-light: #FEF2F2;
+    --info: #0891B2;
+    --info-light: #F0F9FF;
+
+    --sidebar-bg: #F8F9FA;
+    --sidebar-border: #E9ECEF;
+    --sidebar-item-active: #EFF6FF;
+    --sidebar-text-active: #2563EB;
+
+    /* shadcn/ui mappings to prevent breaking */
+    --foreground: var(--text-primary);
+    --card: var(--surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--background);
+    --popover-foreground: var(--text-primary);
+    --primary: var(--brand);
+    --primary-foreground: #FFFFFF;
+    --secondary: var(--surface);
+    --secondary-foreground: var(--text-secondary);
+    --muted: var(--surface-hover);
+    --muted-foreground: var(--text-muted);
+    --accent: var(--brand-light);
+    --accent-foreground: var(--brand);
+    --destructive: var(--danger);
+    --destructive-foreground: #FFFFFF;
+    --ring: var(--brand);
+    --radius: 0.5rem;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--text-primary);
+    @apply font-sans;
+  }
+
+  * {
+    border-color: var(--border);
+  }
+}
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-ring: var(--ring);
+}

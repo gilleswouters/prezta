@@ -1,0 +1,145 @@
+import { useState } from 'react';
+import { useClients, useDeleteClient } from '@/hooks/useClients';
+import type { Client } from '@/types/client';
+import { ClientModal } from '@/components/ClientModal';
+
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow
+} from '@/components/ui/table';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
+import { MoreHorizontal, Plus, Loader2, Pencil, Trash2, Mail, Phone } from 'lucide-react';
+
+export default function ClientsPage() {
+    const { data: clients, isLoading } = useClients();
+    const deleteClient = useDeleteClient();
+
+    const [modalOpen, setModalOpen] = useState(false);
+    const [editingClient, setEditingClient] = useState<Client | null>(null);
+
+    const handleCreateNew = () => {
+        setEditingClient(null);
+        setModalOpen(true);
+    };
+
+    const handleEdit = (client: Client) => {
+        setEditingClient(client);
+        setModalOpen(true);
+    };
+
+    const handleDelete = async (id: string, name: string) => {
+        if (confirm(`Êtes-vous sûr de vouloir supprimer le client "${name}" ? Cette action est irréversible.`)) {
+            await deleteClient.mutateAsync(id);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <div className="flex justify-center items-center h-full min-h-[50vh]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted" />
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                    <h1 className="text-3xl font-serif text-text">Clients</h1>
+                    <p className="text-muted mt-1">Gérez votre carnet d'adresses et professionnels.</p>
+                </div>
+                <Button onClick={handleCreateNew} className="bg-p3 text-bg hover:opacity-90">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Nouveau Client
+                </Button>
+            </div>
+
+            <div className="rounded-md border border-border bg-surface">
+                <Table>
+                    <TableHeader>
+                        <TableRow className="border-border hover:bg-transparent">
+                            <TableHead className="text-muted">Nom / Entreprise</TableHead>
+                            <TableHead className="text-muted">Contact</TableHead>
+                            <TableHead className="text-muted hidden md:table-cell">TVA</TableHead>
+                            <TableHead className="text-right text-muted">Actions</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {clients?.length === 0 ? (
+                            <TableRow className="border-border hover:bg-transparent">
+                                <TableCell colSpan={4} className="h-32 text-center text-muted">
+                                    Aucun client pour le moment.<br />
+                                    <span className="text-sm">Commencez par en ajouter un pour établir des devis.</span>
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            clients?.map((client) => (
+                                <TableRow key={client.id} className="border-border hover:bg-surface2/50 transition-colors">
+                                    <TableCell className="font-medium text-text">
+                                        {client.name}
+                                    </TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1 text-sm text-muted">
+                                            {client.email && (
+                                                <div className="flex items-center gap-2">
+                                                    <Mail className="h-3 w-3" />
+                                                    <a href={`mailto:${client.email}`} className="hover:text-text transition-colors">{client.email}</a>
+                                                </div>
+                                            )}
+                                            {client.phone && (
+                                                <div className="flex items-center gap-2">
+                                                    <Phone className="h-3 w-3" />
+                                                    <span>{client.phone}</span>
+                                                </div>
+                                            )}
+                                            {!client.email && !client.phone && <span className="opacity-50 italic">Aucun contact</span>}
+                                        </div>
+                                    </TableCell>
+                                    <TableCell className="hidden md:table-cell text-muted text-sm">
+                                        {client.vat_number || '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" className="h-8 w-8 p-0 text-muted hover:text-text">
+                                                    <span className="sr-only">Ouvrir le menu</span>
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end" className="bg-surface2 border-border text-text">
+                                                <DropdownMenuItem onClick={() => handleEdit(client)} className="hover:bg-surface cursor-pointer focus:bg-surface">
+                                                    <Pencil className="mr-2 h-4 w-4" />
+                                                    <span>Modifier</span>
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => handleDelete(client.id, client.name)} className="text-red-400 hover:text-red-300 hover:bg-red-400/10 cursor-pointer focus:bg-red-400/10">
+                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                    <span>Supprimer</span>
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                    </TableBody>
+                </Table>
+            </div>
+
+            <ClientModal
+                open={modalOpen}
+                onOpenChange={setModalOpen}
+                client={editingClient}
+            />
+        </div>
+    );
+}
