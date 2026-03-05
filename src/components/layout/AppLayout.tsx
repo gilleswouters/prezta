@@ -2,7 +2,7 @@ import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, Clock } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, Clock, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { ChatAssistant } from '@/components/ai/ChatAssistant';
 
@@ -16,6 +16,7 @@ export default function AppLayout() {
     // Map route to title
     const getPageTitle = (pathname: string) => {
         if (pathname === '/dashboard') return 'Tableau de bord';
+        if (pathname === '/templates') return 'Modèles de contrats';
         if (pathname.includes('/projets')) return 'Projets';
         if (pathname.includes('/clients')) return 'Clients';
         if (pathname.includes('/catalogue')) return 'Catalogue';
@@ -39,6 +40,7 @@ export default function AppLayout() {
             items: [
                 { label: 'Catalogue', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
                 { label: 'Registre', path: '/registre', icon: <Receipt className="h-4 w-4" /> },
+                { label: 'Modèles', path: '/templates', icon: <FileText className="h-4 w-4" /> },
             ]
         },
         {

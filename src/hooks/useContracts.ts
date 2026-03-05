@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
-import type { ContractTemplate, ProjectContract, ProjectContractFormData } from '@/types/contract';
+import type { ContractTemplate, ContractTemplateFormData, ProjectContract, ProjectContractFormData } from '@/types/contract';
 
 // --- CONTRACT TEMPLATES ---
 
@@ -28,6 +28,93 @@ export const useContractTemplates = () => {
             return data as ContractTemplate[];
         },
         enabled: true, // System templates are visible even without auth
+    });
+};
+
+export const useCreateContractTemplate = () => {
+    const queryClient = useQueryClient();
+    const { user } = useAuth();
+
+    return useMutation({
+        mutationFn: async (newTemplate: ContractTemplateFormData) => {
+            if (!user?.id) throw new Error("Non authentifié");
+            // Les templates créés par l'user ne sont jamais system
+            const { data, error } = await supabase
+                .from('contract_templates')
+                .insert([{ ...newTemplate, user_id: user.id, is_system: false }])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data as ContractTemplate;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['contract-templates', user?.id] });
+            toast.success("Modèle de contrat ajouté.");
+        },
+        onError: (error) => {
+            console.error(error);
+            toast.error("Impossible d'ajouter le modèle.");
+        }
+    });
+};
+
+export const useUpdateContractTemplate = () => {
+    const queryClient = useQueryClient();
+    const { user } = useAuth();
+
+    return useMutation({
+        mutationFn: async ({ id, updates }: { id: string, updates: Partial<ContractTemplateFormData> }) => {
+            if (!user?.id) throw new Error("Non authentifié");
+
+            // On s'assure qu'il ne peut MAJ que ses propres templates
+            const { data, error } = await supabase
+                .from('contract_templates')
+                .update(updates)
+                .eq('id', id)
+                .eq('user_id', user.id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data as ContractTemplate;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['contract-templates', user?.id] });
+            toast.success("Modèle de contrat mis à jour.");
+        },
+        onError: (error) => {
+            console.error(error);
+            toast.error("Échec de la mise à jour du modèle.");
+        }
+    });
+};
+
+export const useDeleteContractTemplate = () => {
+    const queryClient = useQueryClient();
+    const { user } = useAuth();
+
+    return useMutation({
+        mutationFn: async (id: string) => {
+            if (!user?.id) throw new Error("Non authentifié");
+            const { error } = await supabase
+                .from('contract_templates')
+                .delete()
+                .eq('id', id)
+                .eq('user_id', user.id)
+                // Empêche la suppression d'un template system, au cas où
+                .eq('is_system', false);
+
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['contract-templates', user?.id] });
+            toast.success("Modèle de contrat supprimé.");
+        },
+        onError: (error) => {
+            console.error(error);
+            toast.error("Impossible de supprimer ce modèle.");
+        }
     });
 };
 

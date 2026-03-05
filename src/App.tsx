@@ -17,6 +17,7 @@ import InvoicesPage from '@/pages/InvoicesPage'
 import PricingPage from '@/pages/PricingPage'
 import ClientPortalPage from '@/pages/ClientPortalPage'
 import CalendarPage from '@/pages/CalendarPage'
+import ContractTemplatesPage from '@/pages/ContractTemplatesPage'
 import { Toaster } from '@/components/ui/sonner'
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
               <Route path="/profil" element={<ProfilePage />} />
               <Route path="/clients" element={<ClientsPage />} />
               <Route path="/catalogue" element={<CataloguePage />} />
+              <Route path="/templates" element={<ContractTemplatesPage />} />
               <Route path="/registre" element={<InvoicesPage />} />
               <Route path="/projets" element={<ProjectsPage />} />
               <Route path="/pricing" element={<PricingPage />} />
