@@ -66,7 +66,7 @@ export default function LandingPage() {
                             Connexion
                         </Button>
                         <Button className="bg-brand text-white hover:bg-brand-hover text-sm font-semibold" onClick={() => navigate('/signup')}>
-                            Commencer gratuitement
+                            Inscription
                         </Button>
                     </div>
                 </div>
