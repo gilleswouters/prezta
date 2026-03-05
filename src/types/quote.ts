@@ -13,11 +13,13 @@ export interface QuoteLine {
 
 export interface QuoteData {
     id?: string;
+    reference?: string;
     title: string;
     projectId: string;
     clientId?: string;
     lines: QuoteLine[];
     notes?: string;
+    status?: 'draft' | 'sent' | 'accepted' | 'rejected';
 }
 
 // Calcul Helper Type

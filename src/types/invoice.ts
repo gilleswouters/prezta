@@ -8,6 +8,7 @@ export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
 
 export interface Invoice {
     id: string; // uuid
+    reference?: string;
     user_id: string;
     project_id: string | null;
     amount: number;
@@ -19,7 +20,7 @@ export interface Invoice {
     created_at: string;
 }
 
-export type InvoiceFormData = Omit<Invoice, 'id' | 'user_id' | 'created_at' | 'last_reminder_date'>;
+export type InvoiceFormData = Omit<Invoice, 'id' | 'reference' | 'user_id' | 'created_at' | 'last_reminder_date'>;
 
 export interface InvoiceWithProject extends Invoice {
     projects: {

@@ -89,7 +89,7 @@ export default function LandingPage() {
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
                     <Button size="lg" className="bg-brand text-white hover:bg-brand-hover w-full sm:w-auto h-12 px-8 text-base font-bold shadow-lg shadow-brand/20" onClick={() => navigate('/signup')}>
-                        Commencer gratuitement — c'est gratuit
+                        Tester Prezta dès aujourd'hui
                     </Button>
                     <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-8 text-base font-semibold border-border bg-white text-text-secondary hover:bg-surface-hover hover:text-text-primary" onClick={() => { document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }) }}>
                         Voir les fonctionnalités

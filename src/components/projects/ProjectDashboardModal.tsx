@@ -7,9 +7,12 @@ import { Button } from '@/components/ui/button';
 import { ProjectKanban } from '@/components/tasks/ProjectKanban';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon } from 'lucide-react';
+import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
+import { useQuoteByProject } from '@/hooks/useQuotes';
+import { useProjectContracts } from '@/hooks/useContracts';
+import { useInvoices } from '@/hooks/useInvoices';
 
 interface ProjectDashboardModalProps {
     open: boolean;
@@ -24,11 +27,62 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
 
+    // Fetch all project documents
+    const { data: quote, isLoading: quoteLoading } = useQuoteByProject(project?.id);
+    const { data: contracts, isLoading: contractsLoading } = useProjectContracts(project?.id);
+    const { data: invoices, isLoading: invoicesLoading } = useInvoices(project?.id);
+
     React.useEffect(() => {
         if (open) {
             setActiveTab(defaultTab);
         }
     }, [open, defaultTab]);
+
+    // Combine documents for the pipeline
+    const combinedDocuments = React.useMemo(() => {
+        const docs = [];
+        if (quote) {
+            docs.push({
+                type: 'quote',
+                id: quote.id,
+                title: quote.title,
+                reference: quote.reference || 'Nouveau',
+                status: quote.status || 'draft',
+                date: quote.created_at,
+                icon: FileText,
+                color: 'text-orange-600',
+                bg: 'bg-orange-100'
+            });
+        }
+        if (contracts) {
+            contracts.forEach(c => docs.push({
+                type: 'contract',
+                id: c.id,
+                title: c.title,
+                reference: c.reference || 'Nouveau',
+                status: c.status,
+                date: c.created_at,
+                icon: FileSignature,
+                color: 'text-indigo-600',
+                bg: 'bg-indigo-100'
+            }));
+        }
+        if (invoices) {
+            invoices.forEach((i: any) => docs.push({
+                type: 'invoice',
+                id: i.id,
+                title: i.notes ? `Facture (${i.notes})` : 'Facture',
+                reference: i.reference || 'Nouveau',
+                status: i.status,
+                date: i.created_at,
+                icon: Receipt,
+                color: 'text-emerald-600',
+                bg: 'bg-emerald-100'
+            }));
+        }
+        // Trier du plus récent au plus ancien
+        return docs.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+    }, [quote, contracts, invoices]);
 
     if (!project) return null;
 
@@ -45,6 +99,35 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
         const url = `${window.location.origin}/portal/${project.portal_link}`;
         navigator.clipboard.writeText(url);
         toast.success("Lien client copié !", { description: "Le lien du portail sécurisé est prêt à être envoyé." });
+    };
+
+    const isLoadingDocs = quoteLoading || contractsLoading || invoicesLoading;
+    const hasDocuments = combinedDocuments.length > 0;
+
+    const translateDocStatus = (type: string, status: string) => {
+        if (type === 'invoice') {
+            switch (status) {
+                case 'en_attente': return <span className="text-orange-600 bg-orange-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">En attente</span>;
+                case 'payé': return <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Payé</span>;
+                case 'en_retard': return <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">En retard</span>;
+            }
+        }
+        if (type === 'contract') {
+            switch (status) {
+                case 'draft': return <span className="text-gray-600 bg-gray-100 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Brouillon</span>;
+                case 'sent': return <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Envoyé</span>;
+                case 'signed': return <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Signé</span>;
+            }
+        }
+        if (type === 'quote') {
+            switch (status) {
+                case 'draft': return <span className="text-gray-600 bg-gray-100 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Brouillon</span>;
+                case 'sent': return <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Envoyé</span>;
+                case 'accepted': return <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Accepté</span>;
+                case 'rejected': return <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Refusé</span>;
+            }
+        }
+        return <span className="text-gray-500 bg-gray-100 px-2 py-0.5 rounded text-xs uppercase font-bold">{status}</span>;
     };
 
     return (
@@ -103,7 +186,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 value="documents"
                                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--brand)] data-[state=active]:bg-transparent data-[state=active]:shadow-none py-3 px-1"
                             >
-                                <FileText className="h-4 w-4 mr-2" /> Commercial & Légal
+                                <FileText className="h-4 w-4 mr-2" /> Documents & Facturation
                             </TabsTrigger>
                         </TabsList>
                     </div>
@@ -188,33 +271,88 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="documents" className="m-0 focus-visible:outline-none h-full">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                <div className="bg-white rounded-xl border border-[var(--brand)]/10 shadow-sm p-8 pb-10 text-center hover:shadow-md transition-shadow hover:border-[var(--brand)]/30">
-                                    <div className="h-20 w-20 bg-[var(--brand)]/5 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-[var(--brand)]/10">
-                                        <FileText className="h-10 w-10 text-[var(--brand)]" />
+                        <TabsContent value="documents" className="m-0 focus-visible:outline-none">
+                            <div className="bg-white rounded-xl border border-border shadow-sm p-6 overflow-hidden">
+                                <div className="flex items-center justify-between mb-8 border-b border-border pb-4">
+                                    <div>
+                                        <h3 className="font-bold text-lg text-text-primary">Pipeline Documentaire</h3>
+                                        <p className="text-sm text-text-muted">Retrouvez l'historique légal et financier lié à ce projet.</p>
                                     </div>
-                                    <h3 className="text-xl font-bold mb-3">Cycle de Facturation</h3>
-                                    <p className="text-text-muted text-sm mb-6">
-                                        Créez des devis, transformez-les en factures en un clic et suivez les paiements.
-                                    </p>
-                                    <Button onClick={() => navigate(`/projets/${project.id}/devis`)} className="bg-[var(--brand)] text-white hover:bg-[var(--brand-hover)] w-full sm:w-auto">
-                                        Accéder à l'éditeur financier
-                                    </Button>
+                                    <div className="flex gap-2">
+                                        <Button variant="outline" size="sm" onClick={() => navigate(`/projets/${project.id}/devis`)} className="text-orange-600 border-orange-200 hover:bg-orange-50">
+                                            <Plus className="h-4 w-4 mr-1" /> Devis / Facture
+                                        </Button>
+                                        <Button variant="outline" size="sm" onClick={onOpenContracts} className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+                                            <Plus className="h-4 w-4 mr-1" /> Contrat Légal
+                                        </Button>
+                                    </div>
                                 </div>
 
-                                <div className="bg-white rounded-xl border border-blue-100 shadow-sm p-8 pb-10 text-center hover:shadow-md transition-shadow hover:border-blue-300">
-                                    <div className="h-20 w-20 bg-blue-50 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-blue-100">
-                                        <FileSignature className="h-10 w-10 text-blue-600" />
+                                {isLoadingDocs ? (
+                                    <div className="py-20 flex flex-col items-center justify-center text-text-muted">
+                                        <Clock className="h-8 w-8 animate-spin opacity-50 mb-4" />
+                                        <p>Chargement des documents...</p>
                                     </div>
-                                    <h3 className="text-xl font-bold mb-3">Documents Légaux</h3>
-                                    <p className="text-text-muted text-sm mb-6">
-                                        Générez des contrats personnalisés et envoyez-les pour signature électronique via Firma.dev.
-                                    </p>
-                                    <Button onClick={onOpenContracts} className="bg-blue-600 text-white hover:bg-blue-700 w-full sm:w-auto h-11 px-8 rounded-lg shadow-sm">
-                                        Gérer les contrats
-                                    </Button>
-                                </div>
+                                ) : !hasDocuments ? (
+                                    <div className="py-16 text-center border-2 border-dashed border-border rounded-xl bg-surface/50">
+                                        <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm border border-border">
+                                            <FileText className="h-8 w-8 text-text-muted" />
+                                        </div>
+                                        <h4 className="font-bold text-text-primary mb-2">Aucun document généré</h4>
+                                        <p className="text-sm text-text-muted max-w-sm mx-auto mb-6">
+                                            Commencez par générer un devis ou un contrat légal pour structurer la mission.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="relative border-l-2 border-border/50 ml-3 pl-6 space-y-6">
+                                        {combinedDocuments.map((doc) => {
+                                            const Icon = doc.icon;
+                                            return (
+                                                <div key={`${doc.type}-${doc.id}`} className="relative group">
+                                                    {/* Timeline Dot */}
+                                                    <div className={`absolute -left-[35px] top-1.5 h-6 w-6 rounded-full border-4 border-white ${doc.bg} ${doc.color} flex items-center justify-center shadow-sm z-10 transition-transform group-hover:scale-110`}>
+                                                        <Icon className="h-2.5 w-2.5" />
+                                                    </div>
+
+                                                    <div className="bg-white border text-left border-border rounded-xl p-4 shadow-sm hover:border-[var(--brand)]/30 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center justify-between sm:justify-start gap-4 mb-1">
+                                                                <h4 className="font-bold text-text-primary text-base">
+                                                                    {doc.title}
+                                                                </h4>
+                                                                {translateDocStatus(doc.type, doc.status)}
+                                                            </div>
+                                                            <div className="flex items-center gap-3 text-xs text-text-muted mt-2">
+                                                                <span className="font-mono bg-surface px-2 py-0.5 rounded border border-border/50 font-bold">{doc.reference}</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    <Calendar className="h-3 w-3" />
+                                                                    {doc.date ? format(new Date(doc.date), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Non daté'}
+                                                                </span>
+                                                                <span className="capitalize opacity-60">• {doc.type === 'quote' ? 'Devis' : doc.type === 'contract' ? 'Contrat' : 'Facture'}</span>
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="flex-shrink-0">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className={`h-8 hover:bg-surface border border-transparent hover:border-border`}
+                                                                onClick={() => {
+                                                                    if (doc.type === 'contract') onOpenContracts();
+                                                                    else navigate(`/projets/${project.id}/devis`);
+                                                                }}
+                                                            >
+                                                                Gérer <LayoutDashboard className="h-3 w-3 ml-2 opacity-50" />
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                        {/* Bottom Fade indicator */}
+                                        <div className="absolute -left-[24px] bottom-0 h-10 w-2 bg-gradient-to-t from-white to-transparent" />
+                                    </div>
+                                )}
                             </div>
                         </TabsContent>
 

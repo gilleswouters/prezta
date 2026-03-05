@@ -15,12 +15,12 @@ export default function PricingPage() {
         : BASE_CHECKOUT_URL;
 
     const features = [
-        { name: "Projets illimités", free: false, pro: true },
-        { name: "Assistant IA (200 msg/jour)", free: false, pro: true },
-        { name: "E-signature (Phase 2)", free: false, pro: true },
-        { name: "Export PDF Personnalisé", free: true, pro: true },
-        { name: "Gestion Clients & Catalogue", free: true, pro: true },
-        { name: "Support Prioritaire", free: false, pro: true },
+        { name: "Projets illimités" },
+        { name: "Assistant IA (200 msg/jour)" },
+        { name: "E-signature Firma.dev incluse" },
+        { name: "Export PDF Personnalisé" },
+        { name: "Gestion Clients & Catalogue" },
+        { name: "Support Prioritaire" },
     ];
 
     return (
@@ -30,58 +30,21 @@ export default function PricingPage() {
                     Propulsez votre activité de Freelance
                 </h2>
                 <p className="text-lg text-[var(--text-secondary)] max-w-2xl mx-auto">
-                    Choisissez le plan qui correspond à vos ambitions. Passez au Pro pour débloquer toute la puissance de Prezta.
+                    Abonnez-vous pour débloquer toute la puissance de Prezta et gérer vos projets sans limite.
                 </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-8 items-start">
-                {/* Plan Gratuit */}
-                <div className="bg-white rounded-3xl border border-[var(--border)] p-8 shadow-sm relative overflow-hidden group hover:border-[var(--border-strong)] transition-all">
-                    <div className="mb-8">
-                        <h3 className="text-xl font-bold text-[var(--text-primary)] mb-2">Gratuit</h3>
-                        <div className="flex items-baseline gap-1">
-                            <span className="text-4xl font-extrabold text-[var(--text-primary)]">0€</span>
-                            <span className="text-[var(--text-muted)]">/mois</span>
-                        </div>
-                        <p className="mt-4 text-sm text-[var(--text-secondary)]">
-                            L'essentiel pour débuter votre activité sereinement.
-                        </p>
-                    </div>
-
-                    <ul className="space-y-4 mb-8">
-                        {features.map((f, i) => (
-                            <li key={i} className="flex items-start gap-3 text-sm">
-                                {f.free ? (
-                                    <Check className="h-5 w-5 text-green-500 shrink-0" />
-                                ) : (
-                                    <div className="h-5 w-5 rounded-full border border-[var(--border)] shrink-0" />
-                                )}
-                                <span className={f.free ? "text-[var(--text-secondary)]" : "text-[var(--text-disabled)] line-through"}>
-                                    {f.name}
-                                </span>
-                            </li>
-                        ))}
-                    </ul>
-
-                    <Button
-                        variant="outline"
-                        className="w-full rounded-xl py-6 border-[var(--border-strong)] text-[var(--text-primary)] font-bold cursor-default opacity-50"
-                        disabled
-                    >
-                        Plan Actuel
-                    </Button>
-                </div>
-
-                {/* Plan Pro */}
-                <div className="bg-white rounded-3xl border-2 border-[var(--brand)] p-8 shadow-xl relative overflow-hidden group transform hover:-translate-y-1 transition-all">
+            <div className="flex justify-center items-start">
+                {/* Plan Unique */}
+                <div className="w-full max-w-md bg-white rounded-3xl border-2 border-[var(--brand)] p-8 shadow-xl relative overflow-hidden group transform hover:-translate-y-1 transition-all">
                     <div className="absolute top-0 right-0 bg-[var(--brand)] text-white text-[10px] font-bold px-4 py-1 rounded-bl-xl uppercase tracking-widest">
-                        Recommandé
+                        L'unique abonnement
                     </div>
 
                     <div className="mb-8">
                         <div className="flex items-center gap-2 text-[var(--brand)] font-bold mb-2 uppercase text-xs tracking-wider">
                             <Sparkles className="h-4 w-4" />
-                            Prezta Pro
+                            Membre Prezta
                         </div>
                         <div className="flex items-baseline gap-1">
                             <span className="text-4xl font-extrabold text-[var(--text-primary)]">14€</span>
@@ -105,7 +68,7 @@ export default function PricingPage() {
 
                     {isPro ? (
                         <div className="bg-[var(--brand-light)] text-[var(--brand)] p-4 rounded-xl text-center font-bold text-sm">
-                            Vous êtes déjà membre PRO 🎉
+                            Vous êtes déjà membre PREZTA 🎉
                         </div>
                     ) : (
                         <Button
@@ -113,7 +76,7 @@ export default function PricingPage() {
                             className="w-full rounded-xl py-6 bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white font-bold shadow-lg shadow-blue-200"
                         >
                             <a href={checkoutUrl} target="_blank" rel="noopener noreferrer">
-                                Passer au Pro
+                                S'abonner
                                 <ArrowRight className="ml-2 h-4 w-4" />
                             </a>
                         </Button>

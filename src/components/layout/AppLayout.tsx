@@ -95,27 +95,6 @@ export default function AppLayout() {
                             </div>
                         ))}
                     </nav>
-
-                    {/* Upgrade CTA for Sidebar */}
-                    {!subscription?.isPro && (
-                        <div className="px-4 mt-6">
-                            <div className="bg-gradient-to-br from-white to-[var(--surface)] border border-[var(--border)] p-4 rounded-2xl shadow-sm">
-                                <div className="flex items-center gap-2 text-[var(--brand)] font-bold text-[10px] mb-2">
-                                    <Sparkles className="h-3 w-3" />
-                                    PLAN GRATUIT
-                                </div>
-                                <p className="text-[10px] text-[var(--text-secondary)] mb-4 leading-relaxed">
-                                    Débloquez les projets illimités et l'IA avancée.
-                                </p>
-                                <Button
-                                    onClick={() => navigate('/pricing')}
-                                    className="w-full bg-[var(--brand)] hover:bg-[var(--brand-hover)] text-white text-[10px] h-8 font-bold rounded-lg"
-                                >
-                                    Passer au Pro
-                                </Button>
-                            </div>
-                        </div>
-                    )}
                 </div>
 
                 {/* Footer User */}
@@ -126,7 +105,7 @@ export default function AppLayout() {
                         </span>
                         <div className="flex items-center gap-1.5 overflow-hidden">
                             <span className="text-[10px] font-medium text-[var(--text-muted)] truncate">
-                                {subscription?.isPro ? 'Membre Pro' : 'Plan Gratuit'}
+                                Membre Prezta
                             </span>
                             {subscription?.isPro && (
                                 <span className="bg-[var(--brand-light)] text-[var(--brand)] text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase shrink-0">

@@ -15,6 +15,7 @@ export interface ContractTemplate {
 
 export interface ProjectContract {
     id: string;
+    reference?: string;
     user_id: string;
     project_id: string;
     template_id: string | null;

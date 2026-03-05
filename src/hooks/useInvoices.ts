@@ -4,17 +4,18 @@ import type { Invoice, InvoiceWithProject, InvoiceFormData } from '@/types/invoi
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
-export const useInvoices = () => {
+export const useInvoices = (projectId?: string) => {
     const { user } = useAuth();
 
     return useQuery({
-        queryKey: ['invoices', user?.id],
+        queryKey: ['invoices', user?.id, projectId],
         queryFn: async () => {
             if (!user?.id) throw new Error("Non authentifié");
-            const { data, error } = await supabase
+            let query = supabase
                 .from('invoices')
                 .select(`
                     id, 
+                    reference,
                     user_id, 
                     project_id, 
                     amount, 
@@ -27,8 +28,13 @@ export const useInvoices = () => {
                         name
                     )
                 `)
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
+                .eq('user_id', user.id);
+
+            if (projectId) {
+                query = query.eq('project_id', projectId);
+            }
+
+            const { data, error } = await query.order('created_at', { ascending: false });
 
             if (error) {
                 console.error("Erreur chargement factures:", error);
