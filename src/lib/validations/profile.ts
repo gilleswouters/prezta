@@ -36,7 +36,9 @@ export const profileSchema = z.object({
     address_street: z.string().optional().nullable(),
     address_city: z.string().optional().nullable(),
     address_zip: z.string().optional().nullable(),
-    logo_url: z.string().optional().nullable()
+    logo_url: z.string().optional().nullable(),
+    legal_representative_name: z.string().optional().nullable(),
+    legal_representative_role: z.string().optional().nullable()
 })
     .superRefine((data, ctx) => {
         // Belgian Specific Rules

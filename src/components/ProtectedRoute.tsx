@@ -7,7 +7,7 @@ export const ProtectedRoute = () => {
     if (loading) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-bg">
-                <div className="text-muted text-sm font-mono tracking-widest uppercase animate-pulse">
+                <div className="text-text-muted text-sm font-mono tracking-widest uppercase animate-pulse">
                     Chargement...
                 </div>
             </div>

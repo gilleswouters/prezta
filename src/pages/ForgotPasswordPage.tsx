@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
                 <Card className="bg-surface border-border">
                     <CardHeader>
                         <CardTitle className="text-text">Mot de passe oublié</CardTitle>
-                        <CardDescription className="text-muted">Entrez votre adresse email pour recevoir un lien de réinitialisation.</CardDescription>
+                        <CardDescription className="text-text-muted">Entrez votre adresse email pour recevoir un lien de réinitialisation.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         {isSent ? (

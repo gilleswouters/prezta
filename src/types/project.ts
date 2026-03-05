@@ -16,18 +16,17 @@ export interface ProjectDocument {
 export interface Project {
     id: string; // uuid
     user_id: string; // references auth.users
-    client_id: string; // references clients
+    client_id: string | null; // references clients
     name: string;
     description: string | null;
     status: ProjectStatus;
-    start_date: string | null;
-    end_date: string | null;
     expected_documents: ProjectDocument[];
+    portal_link: string;
     created_at: string;
     updated_at: string;
 }
 
-export type ProjectFormData = Omit<Project, 'id' | 'user_id' | 'created_at' | 'updated_at'>;
+export type ProjectFormData = Omit<Project, 'id' | 'user_id' | 'portal_link' | 'created_at' | 'updated_at'>;
 
 export interface ProjectWithClient extends Project {
     clients: {

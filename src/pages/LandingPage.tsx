@@ -96,7 +96,7 @@ export default function LandingPage() {
                     </Button>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 text-sm font-bold text-text-muted">
+                <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 text-sm font-bold text-text-text-muted">
                     <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" /> 1 200+ freelances</div>
                     <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" /> 18 000 documents générés</div>
                     <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" /> 4.8/5 satisfaction</div>
@@ -165,7 +165,7 @@ export default function LandingPage() {
                             <h3 className="text-2xl font-bold mb-2 tracking-tight">Gratuit</h3>
                             <div className="flex items-baseline gap-1 mb-6">
                                 <span className="text-4xl font-black">€0</span>
-                                <span className="text-text-muted font-medium">/mois</span>
+                                <span className="text-text-text-muted font-medium">/mois</span>
                             </div>
                             <ul className="space-y-4 mb-8 text-text-secondary font-medium">
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-success" /> 3 projets actifs</li>
@@ -186,9 +186,9 @@ export default function LandingPage() {
                             <h3 className="text-2xl font-bold mb-2 tracking-tight text-brand">Pro</h3>
                             <div className="flex items-baseline gap-1 mb-6">
                                 <span className="text-4xl font-black">€14</span>
-                                <span className="text-text-muted font-medium">/mois</span>
+                                <span className="text-text-text-muted font-medium">/mois</span>
                             </div>
-                            <div className="text-xs text-text-muted mb-6 -mt-4 font-semibold">ou €120/an</div>
+                            <div className="text-xs text-text-text-muted mb-6 -mt-4 font-semibold">ou €120/an</div>
                             <ul className="space-y-4 mb-8 text-text-secondary font-medium">
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Projets illimités</li>
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> E-signature Yousign incluse</li>
@@ -210,7 +210,7 @@ export default function LandingPage() {
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
                         <div className="font-extrabold text-brand text-xl tracking-tight mb-2">Prezta</div>
-                        <p className="text-sm text-text-muted font-medium">Le workspace pour freelances francophones</p>
+                        <p className="text-sm text-text-text-muted font-medium">Le workspace pour freelances francophones</p>
                     </div>
                     <div className="flex gap-6 text-sm font-semibold text-text-secondary">
                         <a href="#features" className="hover:text-brand">Fonctionnalités</a>
@@ -218,7 +218,7 @@ export default function LandingPage() {
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/login')}>Connexion</span>
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/signup')}>Inscription</span>
                     </div>
-                    <div className="text-xs text-text-muted font-medium text-right">
+                    <div className="text-xs text-text-text-muted font-medium text-right">
                         Données hébergées en Europe · RGPD<br />
                         © 2026 Prezta
                     </div>

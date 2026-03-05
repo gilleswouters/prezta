@@ -75,7 +75,7 @@ export default function LoginPage() {
                 <Card className="bg-surface border-border">
                     <CardHeader>
                         <CardTitle className="text-text">Connexion</CardTitle>
-                        <CardDescription className="text-muted">Accédez à votre espace workspace freelance.</CardDescription>
+                        <CardDescription className="text-text-muted">Accédez à votre espace workspace freelance.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -129,7 +129,7 @@ export default function LoginPage() {
                                     <div className="w-full border-t border-border" />
                                 </div>
                                 <div className="relative flex justify-center text-sm">
-                                    <span className="bg-surface px-2 text-muted">Ou continuez avec</span>
+                                    <span className="bg-surface px-2 text-text-muted">Ou continuez avec</span>
                                 </div>
                             </div>
 
@@ -147,7 +147,7 @@ export default function LoginPage() {
                         </div>
                     </CardContent>
                     <CardFooter className="justify-center">
-                        <p className="text-sm text-muted">
+                        <p className="text-sm text-text-muted">
                             Pas encore de compte ?{' '}
                             <Link to="/signup" className="font-medium text-accent hover:text-p1">
                                 S'inscrire

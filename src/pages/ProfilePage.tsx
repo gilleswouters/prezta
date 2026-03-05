@@ -43,7 +43,9 @@ export default function ProfilePage() {
             address_street: '',
             address_city: '',
             address_zip: '',
-            logo_url: ''
+            logo_url: '',
+            legal_representative_name: '',
+            legal_representative_role: ''
         }
     });
 
@@ -65,7 +67,9 @@ export default function ProfilePage() {
                 address_street: profile.address_street || '',
                 address_city: profile.address_city || '',
                 address_zip: profile.address_zip || '',
-                logo_url: profile.logo_url || ''
+                logo_url: profile.logo_url || '',
+                legal_representative_name: profile.legal_representative_name || '',
+                legal_representative_role: profile.legal_representative_role || ''
             });
         }
     }, [profile, reset]);
@@ -104,7 +108,7 @@ export default function ProfilePage() {
     if (isLoading) {
         return (
             <div className="flex justify-center items-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-muted" />
+                <Loader2 className="h-8 w-8 animate-spin text-text-muted" />
             </div>
         );
     }
@@ -114,7 +118,7 @@ export default function ProfilePage() {
             <Card className="bg-surface border-border">
                 <CardHeader>
                     <CardTitle className="text-2xl font-serif text-text">Profil & Informations Légales</CardTitle>
-                    <CardDescription className="text-muted">
+                    <CardDescription className="text-text-muted">
                         Ces informations apparaîtront sur tous vos documents générés (devis, factures).
                     </CardDescription>
                 </CardHeader>
@@ -125,7 +129,7 @@ export default function ProfilePage() {
 
                             {/* === IDENTITE === */}
                             <div className="space-y-4">
-                                <h3 className="text-sm font-mono text-muted uppercase tracking-wider">Identité</h3>
+                                <h3 className="text-sm font-mono text-text-muted uppercase tracking-wider">Identité</h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="full_name" render={({ field }) => (
@@ -153,7 +157,7 @@ export default function ProfilePage() {
 
                             {/* === ENTREPRISE === */}
                             <div className="space-y-4 pt-6 border-t border-border">
-                                <h3 className="text-sm font-mono text-muted uppercase tracking-wider">Entreprise</h3>
+                                <h3 className="text-sm font-mono text-text-muted uppercase tracking-wider">Entreprise</h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="country" render={({ field }) => (
@@ -213,17 +217,40 @@ export default function ProfilePage() {
                                     )} />
                                 </div>
 
+                                <FormField control={form.control} name="company_name" render={({ field }) => (
+                                    <div className="space-y-2">
+                                        <FormLabel className="text-text">Nom de la société (Optionnel)</FormLabel>
+                                        <FormControl>
+                                            <Input placeholder="Ma Société SRL" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                        </FormControl>
+                                        <FormMessage />
+                                    </div>
+                                )} />
+
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField control={form.control} name="company_name" render={({ field }) => (
+                                    <FormField control={form.control} name="legal_representative_name" render={({ field }) => (
                                         <div className="space-y-2">
-                                            <FormLabel className="text-text">Nom de la société (Optionnel)</FormLabel>
+                                            <FormLabel className="text-text">Nom du représentant légal</FormLabel>
                                             <FormControl>
-                                                <Input placeholder="Ma Société SRL" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                                <Input placeholder="Jean Dupont" className="bg-surface2 border-border" {...field} value={field.value || ''} />
                                             </FormControl>
                                             <FormMessage />
                                         </div>
                                     )} />
 
+
+                                    <FormField control={form.control} name="legal_representative_role" render={({ field }) => (
+                                        <div className="space-y-2">
+                                            <FormLabel className="text-text">Fonction du représentant</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="Gérant, Président, Indépendant..." className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </div>
+                                    )} />
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {/* CONDITIONAL VAT/BCE/SIRET */}
                                     {currentCountry === Country.BE && (
                                         <FormField control={form.control} name="bce_number" render={({ field }) => (
@@ -263,7 +290,7 @@ export default function ProfilePage() {
 
                             {/* === FINANCIAL & ADDRESS === */}
                             <div className="space-y-4 pt-6 border-t border-border">
-                                <h3 className="text-sm font-mono text-muted uppercase tracking-wider">Facturation & Coordonnées</h3>
+                                <h3 className="text-sm font-mono text-text-muted uppercase tracking-wider">Facturation & Coordonnées</h3>
 
                                 <FormField control={form.control} name="iban" render={({ field }) => (
                                     <div className="space-y-2">
@@ -312,18 +339,18 @@ export default function ProfilePage() {
 
                             {/* === LOGO === */}
                             <div className="space-y-4 pt-6 border-t border-border">
-                                <h3 className="text-sm font-mono text-muted uppercase tracking-wider">Identité Visuelle</h3>
+                                <h3 className="text-sm font-mono text-text-muted uppercase tracking-wider">Identité Visuelle</h3>
                                 <div className="flex items-center space-x-6">
                                     <Avatar className="h-24 w-24 border border-border bg-surface2">
                                         <AvatarImage src={form.watch('logo_url') || ''} alt="Logo" className="object-cover" />
-                                        <AvatarFallback className="text-muted">LOGO</AvatarFallback>
+                                        <AvatarFallback className="text-text-muted">LOGO</AvatarFallback>
                                     </Avatar>
                                     <div className="space-y-2">
                                         <FormLabel className="text-text">Logo (Optionnel)</FormLabel>
                                         <Input
                                             type="file"
                                             accept="image/png, image/jpeg, image/webp"
-                                            className="bg-surface2 border-border text-muted cursor-pointer"
+                                            className="bg-surface2 border-border text-text-muted cursor-pointer"
                                             onChange={handleLogoChange}
                                         />
                                         <FormDescription>Max 2MB. JPG, PNG ou WEBP.</FormDescription>
@@ -344,6 +371,6 @@ export default function ProfilePage() {
                     </form>
                 </Form>
             </Card>
-        </div>
+        </div >
     );
 }

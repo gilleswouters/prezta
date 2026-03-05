@@ -11,6 +11,7 @@ import { useCreateProject } from '@/hooks/useProjects';
 import type { ProjectDocument, ProjectFormData } from '@/types/project';
 import { ProjectStatus } from '@/types/project';
 import { askGemini } from '@/lib/gemini';
+import { ClientModal } from '@/components/ClientModal';
 
 import {
     Card,
@@ -53,6 +54,8 @@ export default function ProjectWizard() {
             description: projectData.description || '',
         }
     });
+
+    const [isClientModalOpen, setIsClientModalOpen] = useState(false);
 
     // Step 3 Local State (bypassing full react-hook-form for dynamic array simplicity here)
     const [documents, setDocuments] = useState<ProjectDocument[]>(projectData.expected_documents || []);
@@ -129,13 +132,13 @@ export default function ProjectWizard() {
 
     const handleFinalSubmit = async () => {
         try {
+            const finalClientId = projectData.client_id && projectData.client_id !== "empty" ? projectData.client_id : null;
+
             const payload: ProjectFormData = {
                 name: projectData.name!,
-                client_id: projectData.client_id!,
+                client_id: finalClientId,
                 description: projectData.description || null,
                 status: ProjectStatus.DRAFT,
-                start_date: null,
-                end_date: null,
                 expected_documents: documents
             };
 
@@ -171,18 +174,35 @@ export default function ProjectWizard() {
                                 <FormField control={form1.control} name="client_id" render={({ field }) => (
                                     <div className="space-y-2">
                                         <FormLabel>Client associé *</FormLabel>
-                                        <Select onValueChange={field.onChange} value={field.value} disabled={clientsLoading}>
+                                        <Select
+                                            onValueChange={(val) => {
+                                                if (val === 'new_client') {
+                                                    setIsClientModalOpen(true);
+                                                } else {
+                                                    field.onChange(val);
+                                                }
+                                            }}
+                                            value={field.value || ''}
+                                            disabled={clientsLoading}
+                                        >
                                             <FormControl>
                                                 <SelectTrigger className="bg-surface2 border-border">
-                                                    <SelectValue placeholder={clientsLoading ? "Chargement..." : "Sélect. client"} />
+                                                    <SelectValue placeholder={clientsLoading ? "Chargement..." : "Sélectionner un client"} />
                                                 </SelectTrigger>
                                             </FormControl>
-                                            <SelectContent>
+                                            <SelectContent className="bg-surface border-border z-50 shadow-md">
+                                                <SelectItem value="new_client" className="text-[var(--brand)] font-medium focus:bg-[var(--brand)]/10 cursor-pointer">
+                                                    <div className="flex items-center">
+                                                        <Plus className="h-4 w-4 mr-2" />
+                                                        Créer un nouveau client
+                                                    </div>
+                                                </SelectItem>
+
                                                 {clientsLoading ? null : clients?.length === 0 ? (
-                                                    <SelectItem value="empty" disabled>Aucun client trouvé</SelectItem>
+                                                    <SelectItem value="empty" disabled>Aucun autre client trouvé</SelectItem>
                                                 ) : (
                                                     clients?.map(c => (
-                                                        <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                                                        <SelectItem key={c.id} value={c.id} className="cursor-pointer">{c.name}</SelectItem>
                                                     ))
                                                 )}
                                             </SelectContent>
@@ -265,7 +285,7 @@ export default function ProjectWizard() {
 
                             <div className="space-y-3">
                                 {documents.length === 0 ? (
-                                    <p className="text-center text-sm text-muted py-4">Aucun document dans la checklist.</p>
+                                    <p className="text-center text-sm text-text-muted py-4">Aucun document dans la checklist.</p>
                                 ) : (
                                     documents.map((doc) => (
                                         <div key={doc.id} className="flex items-center justify-between p-2 rounded border border-border bg-surface2">
@@ -273,7 +293,7 @@ export default function ProjectWizard() {
                                                 <Checkbox checked={doc.is_completed} disabled className="opacity-50" />
                                                 <span className="text-sm">{doc.name}</span>
                                             </div>
-                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveDoc(doc.id)} className="h-8 w-8 text-muted hover:text-red-400">
+                                            <Button variant="ghost" size="icon" onClick={() => handleRemoveDoc(doc.id)} className="h-8 w-8 text-text-muted hover:text-red-400">
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </div>
@@ -307,6 +327,12 @@ export default function ProjectWizard() {
                     </>
                 )}
             </Card>
+
+            <ClientModal
+                open={isClientModalOpen}
+                onOpenChange={setIsClientModalOpen}
+                client={null}
+            />
         </div>
     );
 }

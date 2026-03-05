@@ -79,7 +79,7 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
             <DialogContent className="sm:max-w-[500px] bg-surface text-text border-border">
                 <DialogHeader>
                     <DialogTitle className="font-serif text-xl">{isEditing ? 'Modifier Client' : 'Nouveau Client'}</DialogTitle>
-                    <DialogDescription className="text-muted">
+                    <DialogDescription className="text-text-muted">
                         Remplissez les informations du client ci-dessous.
                     </DialogDescription>
                 </DialogHeader>

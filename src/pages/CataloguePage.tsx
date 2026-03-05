@@ -14,12 +14,6 @@ import {
     TableRow
 } from '@/components/ui/table';
 import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -32,7 +26,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { MoreHorizontal, Plus, Loader2, Pencil, Trash2, Search, Star, Sparkles } from 'lucide-react';
+import { Plus, Loader2, Pencil, Trash2, Search, Star, Sparkles } from 'lucide-react';
 
 export default function CataloguePage() {
     const { data: products, isLoading } = useProducts();
@@ -82,7 +76,7 @@ export default function CataloguePage() {
     if (isLoading) {
         return (
             <div className="flex justify-center items-center h-full min-h-[50vh]">
-                <Loader2 className="h-8 w-8 animate-spin text-muted" />
+                <Loader2 className="h-8 w-8 animate-spin text-text-muted" />
             </div>
         );
     }
@@ -96,7 +90,7 @@ export default function CataloguePage() {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
                     <h1 className="text-3xl font-serif text-text w-full max-w-sm">Mon Catalogue</h1>
-                    <p className="text-muted mt-1">Prestations et produits que vous proposez.</p>
+                    <p className="text-text-muted mt-1">Prestations et produits que vous proposez.</p>
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -117,10 +111,10 @@ export default function CataloguePage() {
                 /* EMPTY STATE */
                 <div className="flex flex-col items-center justify-center py-20 px-4 text-center border border-border rounded-lg bg-surface">
                     <div className="bg-surface2 p-4 rounded-full mb-4 ring-1 ring-border shadow-sm">
-                        <Search className="h-10 w-10 text-muted" />
+                        <Search className="h-10 w-10 text-text-muted" />
                     </div>
                     <h2 className="text-xl font-serif text-text mb-2">Aucune prestation définie</h2>
-                    <p className="text-muted max-w-md mb-8">
+                    <p className="text-text-muted max-w-md mb-8">
                         Pour établir vos devis rapidement, commencez par construire votre catalogue de base.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
@@ -138,7 +132,7 @@ export default function CataloguePage() {
                 <div className="space-y-4">
                     <div className="flex flex-col sm:flex-row justify-between gap-4">
                         <div className="relative w-full max-w-sm">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-text-muted" />
                             <Input
                                 placeholder="Rechercher une prestation..."
                                 value={searchQuery}
@@ -163,17 +157,17 @@ export default function CataloguePage() {
                             <TableHeader>
                                 <TableRow className="border-border hover:bg-transparent">
                                     <TableHead className="w-[50px]"></TableHead>
-                                    <TableHead className="text-muted">Prestation</TableHead>
-                                    <TableHead className="text-right text-muted w-[120px]">Prix unitaire HT</TableHead>
-                                    <TableHead className="text-muted hidden md:table-cell w-[100px]">Unité</TableHead>
-                                    <TableHead className="text-muted w-[100px] hidden sm:table-cell">TVA</TableHead>
-                                    <TableHead className="text-right text-muted w-[70px]">Actions</TableHead>
+                                    <TableHead className="text-text-muted">Prestation</TableHead>
+                                    <TableHead className="text-right text-text-muted w-[120px]">Prix unitaire HT</TableHead>
+                                    <TableHead className="text-text-muted hidden md:table-cell w-[100px]">Unité</TableHead>
+                                    <TableHead className="text-text-muted w-[100px] hidden sm:table-cell">TVA</TableHead>
+                                    <TableHead className="text-right text-text-muted w-[70px]">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {filteredProducts.length === 0 ? (
                                     <TableRow className="border-border hover:bg-transparent">
-                                        <TableCell colSpan={6} className="h-32 text-center text-muted">
+                                        <TableCell colSpan={6} className="h-32 text-center text-text-muted">
                                             Aucune prestation ne correspond à vos filtres.
                                         </TableCell>
                                     </TableRow>
@@ -183,7 +177,7 @@ export default function CataloguePage() {
                                             <TableCell>
                                                 <button
                                                     onClick={() => handleToggleFavorite(product)}
-                                                    className={`hover:scale-110 transition-transform ${product.is_favorite ? 'text-accent' : 'text-muted hover:text-text'}`}
+                                                    className={`hover:scale-110 transition-transform ${product.is_favorite ? 'text-accent' : 'text-text-muted hover:text-text'}`}
                                                 >
                                                     <Star className={`h-5 w-5 ${product.is_favorite ? 'fill-accent' : ''}`} />
                                                 </button>
@@ -191,37 +185,27 @@ export default function CataloguePage() {
                                             <TableCell className="max-w-[200px] sm:max-w-none">
                                                 <p className="font-medium text-text truncate" title={product.name}>{product.name}</p>
                                                 {product.description && (
-                                                    <p className="text-xs text-muted truncate mt-1" title={product.description}>{product.description}</p>
+                                                    <p className="text-xs text-text-muted truncate mt-1" title={product.description}>{product.description}</p>
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-right text-text font-mono">
                                                 {product.unit_price} €
                                             </TableCell>
-                                            <TableCell className="hidden md:table-cell text-muted capitalize">
+                                            <TableCell className="hidden md:table-cell text-text-muted capitalize">
                                                 {product.unit}
                                             </TableCell>
-                                            <TableCell className="hidden sm:table-cell text-muted">
+                                            <TableCell className="hidden sm:table-cell text-text-muted">
                                                 {product.tva_rate}%
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger asChild>
-                                                        <Button variant="ghost" className="h-8 w-8 p-0 text-muted hover:text-text">
-                                                            <span className="sr-only">Ouvrir le menu</span>
-                                                            <MoreHorizontal className="h-4 w-4" />
-                                                        </Button>
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent align="end" className="bg-surface2 border-border text-text">
-                                                        <DropdownMenuItem onClick={() => handleEdit(product)} className="hover:bg-surface cursor-pointer focus:bg-surface">
-                                                            <Pencil className="mr-2 h-4 w-4" />
-                                                            <span>Modifier</span>
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem onClick={() => setDeleteId(product.id)} className="text-red-400 hover:text-red-300 hover:bg-red-400/10 cursor-pointer focus:bg-red-400/10">
-                                                            <Trash2 className="mr-2 h-4 w-4" />
-                                                            <span>Supprimer</span>
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleEdit(product)} className="h-8 w-8 text-text-text-muted hover:text-text-primary hover:bg-surface-hover" title="Modifier">
+                                                        <Pencil className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(product.id)} className="h-8 w-8 text-danger hover:text-danger-hover hover:bg-danger-light" title="Supprimer">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -249,7 +233,7 @@ export default function CataloguePage() {
                 <AlertDialogContent className="bg-surface text-text border-border">
                     <AlertDialogHeader>
                         <AlertDialogTitle>Êtes-vous sûr ?</AlertDialogTitle>
-                        <AlertDialogDescription className="text-muted">
+                        <AlertDialogDescription className="text-text-muted">
                             Cette action supprimera définitivement cette prestation de votre catalogue.
                             (Les devis déjà générés avec cette prestation ne seront pas affectés).
                         </AlertDialogDescription>

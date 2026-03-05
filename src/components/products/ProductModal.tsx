@@ -109,7 +109,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
             <DialogContent className="sm:max-w-[500px] bg-surface text-text border-border">
                 <DialogHeader>
                     <DialogTitle className="font-serif text-xl">{isEditing ? 'Modifier la prestation' : 'Nouvelle prestation'}</DialogTitle>
-                    <DialogDescription className="text-muted">
+                    <DialogDescription className="text-text-muted">
                         Configurez le prix, la TVA et l'unité de facturation.
                     </DialogDescription>
                 </DialogHeader>

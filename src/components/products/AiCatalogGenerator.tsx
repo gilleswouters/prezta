@@ -139,7 +139,7 @@ export function AiCatalogGenerator({ open, onOpenChange }: AiCatalogGeneratorPro
                         <Sparkles className="h-5 w-5 text-ai" />
                         Générer avec l'IA
                     </DialogTitle>
-                    <DialogDescription className="text-muted">
+                    <DialogDescription className="text-text-muted">
                         Créez instantanément un catalogue sur-mesure pour votre spécialité.
                     </DialogDescription>
                 </DialogHeader>
@@ -197,8 +197,8 @@ export function AiCatalogGenerator({ open, onOpenChange }: AiCatalogGeneratorPro
                                     />
                                     <div className="flex-1 min-w-0">
                                         <p className="font-medium text-sm text-text truncate">{prod.name}</p>
-                                        {prod.description && <p className="text-xs text-muted line-clamp-2 mt-0.5">{prod.description}</p>}
-                                        <div className="flex items-center gap-2 mt-1.5 text-xs font-mono text-muted">
+                                        {prod.description && <p className="text-xs text-text-muted line-clamp-2 mt-0.5">{prod.description}</p>}
+                                        <div className="flex items-center gap-2 mt-1.5 text-xs font-mono text-text-muted">
                                             <span className="text-p1">{prod.unit_price}€ HT</span>
                                             <span>•</span>
                                             <span>{prod.unit}</span>

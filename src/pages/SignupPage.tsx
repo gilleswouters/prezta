@@ -10,6 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
+import { sendEmail } from '@/lib/resend'
+import { WelcomeEmailTemplate } from '@/components/emails/WelcomeEmail'
 
 const signupSchema = z.object({
     email: z.string().email({ message: "Adresse email invalide" }),
@@ -37,6 +39,13 @@ export default function SignupPage() {
             toast.error(error.message)
             setLoading(false)
         } else {
+            // Trigger Welcome Email (Non-blocking)
+            sendEmail({
+                to: data.email,
+                subject: "Bienvenue sur Prezta ! 🚀",
+                html: WelcomeEmailTemplate(data.email.split('@')[0])
+            });
+
             toast.success("Inscription réussie. Vérifiez vos emails pour confirmer votre compte.")
             navigate('/login')
         }
@@ -54,7 +63,7 @@ export default function SignupPage() {
                 <Card className="bg-surface border-border">
                     <CardHeader>
                         <CardTitle className="text-text">Créer un compte</CardTitle>
-                        <CardDescription className="text-muted">Commencez à gérer votre activité freelance dès aujourd'hui.</CardDescription>
+                        <CardDescription className="text-text-muted">Commencez à gérer votre activité freelance dès aujourd'hui.</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -95,7 +104,7 @@ export default function SignupPage() {
                         </form>
                     </CardContent>
                     <CardFooter className="justify-center">
-                        <p className="text-sm text-muted">
+                        <p className="text-sm text-text-muted">
                             Déjà un compte ?{' '}
                             <Link to="/login" className="font-medium text-accent hover:text-p1">
                                 Se connecter

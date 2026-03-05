@@ -34,6 +34,8 @@ export interface Profile {
     address_city: string | null;
     address_zip: string | null;
     logo_url: string | null;
+    legal_representative_name: string | null;
+    legal_representative_role: string | null;
     created_at: string;
     updated_at: string;
 }
