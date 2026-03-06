@@ -65,8 +65,8 @@ export default function LandingPage() {
                         <Button variant="ghost" className="text-sm font-medium hover:bg-surface-hover" onClick={() => navigate('/login')}>
                             Connexion
                         </Button>
-                        <Button className="bg-brand text-white hover:bg-brand-hover text-sm font-semibold" onClick={() => navigate('/signup')}>
-                            Inscription
+                        <Button className="bg-brand text-white hover:bg-brand-hover text-sm font-semibold" onClick={() => navigate('/pricing')}>
+                            S'abonner
                         </Button>
                     </div>
                 </div>
@@ -88,7 +88,7 @@ export default function LandingPage() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-                    <Button size="lg" className="bg-brand text-white hover:bg-brand-hover w-full sm:w-auto h-12 px-8 text-base font-bold shadow-lg shadow-brand/20" onClick={() => navigate('/signup')}>
+                    <Button size="lg" className="bg-brand text-white hover:bg-brand-hover w-full sm:w-auto h-12 px-8 text-base font-bold shadow-lg shadow-brand/20" onClick={() => navigate('/pricing')}>
                         Tester Prezta dès aujourd'hui
                     </Button>
                     <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-8 text-base font-semibold border-border bg-white text-text-secondary hover:bg-surface-hover hover:text-text-primary" onClick={() => { document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }) }}>
@@ -156,49 +156,30 @@ export default function LandingPage() {
             <section id="pricing" className="py-24 bg-surface px-6">
                 <div className="max-w-7xl mx-auto">
                     <div className="text-center mb-16">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-text-primary mb-4 tracking-tight">Un prix simple et transparent</h2>
+                        <h2 className="text-3xl md:text-4xl font-extrabold text-text-primary mb-4 tracking-tight">L'unique abonnement</h2>
+                        <p className="text-lg text-text-secondary max-w-2xl mx-auto">La solution complète pour les freelances qui veulent scaler, sans prise de tête.</p>
                     </div>
 
-                    <div className="flex flex-col lg:flex-row justify-center gap-8 max-w-4xl mx-auto pb-8">
-                        {/* Gratuit */}
-                        <div className="flex-1 bg-white border border-border rounded-2xl p-8 shadow-sm">
-                            <h3 className="text-2xl font-bold mb-2 tracking-tight">Gratuit</h3>
-                            <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-4xl font-black">€0</span>
-                                <span className="text-text-text-muted font-medium">/mois</span>
-                            </div>
-                            <ul className="space-y-4 mb-8 text-text-secondary font-medium">
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-success" /> 3 projets actifs</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-success" /> Génération PDF</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-success" /> Catalogue de prestations</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-success" /> Assistant IA (50 messages/jour)</li>
-                            </ul>
-                            <Button className="w-full h-12 font-bold" variant="outline" onClick={() => navigate('/signup')}>
-                                Commencer gratuitement
-                            </Button>
-                        </div>
-
+                    <div className="flex justify-center items-start">
                         {/* Pro */}
-                        <div className="flex-1 bg-white border-2 border-brand rounded-2xl p-8 shadow-xl shadow-brand/5 relative">
-                            <div className="absolute top-0 right-8 -translate-y-1/2 bg-brand text-white text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-                                Le plus populaire
+                        <div className="w-full max-w-md bg-white border-2 border-brand rounded-3xl p-8 shadow-xl relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 bg-brand text-white text-[10px] font-bold px-4 py-1 rounded-bl-xl uppercase tracking-widest">
+                                Membre Prezta
                             </div>
-                            <h3 className="text-2xl font-bold mb-2 tracking-tight text-brand">Pro</h3>
-                            <div className="flex items-baseline gap-1 mb-6">
-                                <span className="text-4xl font-black">€14</span>
+                            <h3 className="text-3xl font-bold mb-2 tracking-tight">Prezta Pro</h3>
+                            <div className="flex items-baseline gap-1 mb-8">
+                                <span className="text-5xl font-black">14€</span>
                                 <span className="text-text-text-muted font-medium">/mois</span>
                             </div>
-                            <div className="text-xs text-text-text-muted mb-6 -mt-4 font-semibold">ou €120/an</div>
                             <ul className="space-y-4 mb-8 text-text-secondary font-medium">
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Projets illimités</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> E-signature Yousign incluse</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Tous les templates de contrats</li>
+                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> E-signature Firma.dev incluse</li>
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Assistant IA (200 messages/jour)</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Export comptable ZIP</li>
+                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Export comptable personnalisé</li>
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Support prioritaire</li>
                             </ul>
-                            <Button className="w-full h-12 font-bold bg-brand text-white hover:bg-brand-hover" onClick={() => navigate('/signup?plan=pro')}>
-                                Commencer avec Pro
+                            <Button className="w-full h-14 font-bold bg-brand text-white hover:bg-brand-hover text-lg shadow-md" onClick={() => navigate('/pricing')}>
+                                Devenir Membre PRO
                             </Button>
                         </div>
                     </div>
@@ -216,7 +197,7 @@ export default function LandingPage() {
                         <a href="#features" className="hover:text-brand">Fonctionnalités</a>
                         <a href="#pricing" className="hover:text-brand">Tarifs</a>
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/login')}>Connexion</span>
-                        <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/signup')}>Inscription</span>
+                        <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/pricing')}>S'abonner</span>
                     </div>
                     <div className="text-xs text-text-text-muted font-medium text-right">
                         Données hébergées en Europe · RGPD<br />

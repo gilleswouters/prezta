@@ -1,18 +1,14 @@
 import { Button } from '@/components/ui/button';
 import { Check, Sparkles, Zap, Shield, ArrowRight } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
-import { useAuth } from '@/hooks/useAuth';
 
 const BASE_CHECKOUT_URL = "https://prezta.lemonsqueezy.com/checkout/buy/912fdc98-0a1e-40de-95c8-ffde04fab2a1";
 
 export default function PricingPage() {
-    const { user } = useAuth();
     const { data: subscription } = useSubscription();
     const isPro = subscription?.isPro;
 
-    const checkoutUrl = user?.id
-        ? `${BASE_CHECKOUT_URL}?checkout[custom][user_id]=${user.id}`
-        : BASE_CHECKOUT_URL;
+    const checkoutUrl = BASE_CHECKOUT_URL;
 
     const features = [
         { name: "Projets illimités" },
