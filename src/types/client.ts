@@ -7,6 +7,8 @@ export interface Client {
     address: string | null;
     vat_number: string | null;
     notes: string | null;
+    siret: string | null;
+    legal_status: string | null;
     created_at: string;
 }
 

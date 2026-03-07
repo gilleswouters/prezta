@@ -6,7 +6,9 @@ export const clientSchema = z.object({
     phone: z.string().optional().nullable(),
     address: z.string().optional().nullable(),
     vat_number: z.string().optional().nullable(),
-    notes: z.string().optional().nullable()
+    notes: z.string().optional().nullable(),
+    siret: z.string().optional().nullable(),
+    legal_status: z.string().optional().nullable()
 });
 
 export type ClientFormValues = z.infer<typeof clientSchema>;

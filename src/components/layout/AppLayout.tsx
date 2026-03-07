@@ -72,7 +72,7 @@ export default function AppLayout() {
                     <nav className="px-4 space-y-6 flex-1 overflow-y-auto w-full">
                         {navItems.map((group) => (
                             <div key={group.group}>
-                                <div className="px-2 mb-2 text-[10px] uppercase tracking-wider text-[var(--text-text-muted)] font-semibold font-mono">
+                                <div className="px-2 mb-2 text-[10px] uppercase tracking-wider text-[var(--text-muted)] font-semibold font-mono">
                                     {group.group}
                                 </div>
                                 <div className="space-y-1">
@@ -114,7 +114,7 @@ export default function AppLayout() {
                             )}
                         </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[var(--text-text-muted)] hover:text-danger hover:bg-[var(--danger-light)] shrink-0" onClick={() => signOut()}>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-[var(--text-muted)] hover:text-danger hover:bg-[var(--danger-light)] shrink-0" onClick={() => signOut()}>
                         <LogOut className="h-4 w-4" />
                     </Button>
                 </div>

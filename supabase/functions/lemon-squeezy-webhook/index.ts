@@ -2,44 +2,52 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
 
-const LE_SQUEEZY_SECRET = Deno.env.get("LEMON_SQUEEZY_WEBHOOK_SECRET");
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
-
 serve(async (req) => {
+    console.log("--> 🟢 WEBHOOK REACHED 🟢 <--", req.method, req.url);
     try {
+        // Fetch secrets on every request to ensure they aren't stale
+        const LE_SQUEEZY_SECRET = Deno.env.get("LEMON_SQUEEZY_WEBHOOK_SECRET");
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+        const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+        const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+
         if (req.method !== 'POST') {
             return new Response("Method not allowed", { status: 405 });
         }
 
         const signature = req.headers.get("x-signature");
         if (!signature || !LE_SQUEEZY_SECRET) {
+            console.error("Missing signature or secret!", {
+                hasSignature: !!signature,
+                hasSecret: !!LE_SQUEEZY_SECRET
+            });
             return new Response("Missing signature or secret", { status: 401 });
         }
 
         const body = await req.text();
 
-        // Verify webhook signature (HMAC SHA-256)
+        // 3. Verify Lemon Squeezy Signature (from working snippet)
         const encoder = new TextEncoder();
-        const keyData = encoder.encode(LE_SQUEEZY_SECRET);
         const key = await crypto.subtle.importKey(
-            "raw",
-            keyData,
-            { name: "HMAC", hash: "SHA-256" },
+            'raw',
+            encoder.encode(LE_SQUEEZY_SECRET),
+            { name: 'HMAC', hash: 'SHA-256' },
             false,
-            ["verify"]
+            ['sign']
         );
-        const signatureBytes = hexToBytes(signature);
-        const isVerified = await crypto.subtle.verify(
-            "HMAC",
+        const signatureBuffer = await crypto.subtle.sign(
+            'HMAC',
             key,
-            signatureBytes,
             encoder.encode(body)
         );
 
-        if (!isVerified) {
-            return new Response("Invalid signature", { status: 401 });
+        const hexSignature = Array.from(new Uint8Array(signatureBuffer))
+            .map(b => b.toString(16).padStart(2, '0'))
+            .join('');
+
+        if (signature !== hexSignature) {
+            console.error('Signature mismatch', { received: signature, expected: hexSignature });
+            return new Response('Signature mismatch', { status: 401 });
         }
 
         const payload = JSON.parse(body);
@@ -104,7 +112,6 @@ serve(async (req) => {
                     plan: 'pro',
                     status: data.status,
                     lemon_squeezy_id: payload.data.id,
-                    variant_id: data.variant_id.toString(),
                     current_period_end: data.renews_at
                 }).eq('user_id', userId);
                 subError = error;
@@ -114,7 +121,6 @@ serve(async (req) => {
                     plan: 'pro',
                     status: data.status,
                     lemon_squeezy_id: payload.data.id,
-                    variant_id: data.variant_id.toString(),
                     current_period_end: data.renews_at
                 });
                 subError = error;

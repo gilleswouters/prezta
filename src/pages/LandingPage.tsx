@@ -42,8 +42,8 @@ export default function LandingPage() {
         },
         {
             icon: <Globe className="h-6 w-6 text-brand" />,
-            title: "FR · BE · CH",
-            description: "TVA, mentions légales et contrats adaptés automatiquement selon votre pays",
+            title: "100% Français 🇫🇷",
+            description: "Mention CGI art. 293B, RCS, pénalités de retard : vos documents sont toujours légalement irréprochables en France.",
         }
     ];
 
@@ -75,7 +75,7 @@ export default function LandingPage() {
             {/* Hero Section */}
             <section className="pt-32 pb-20 px-6 max-w-7xl mx-auto text-center">
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-brand-light text-brand text-xs font-bold uppercase tracking-wider mb-8">
-                    Workspace freelance · BE · FR · CH
+                    Conçu pour les freelances en France 🇫🇷
                 </div>
 
                 <h1 className="text-4xl md:text-6xl font-extrabold text-text-primary tracking-tight mb-6 max-w-4xl mx-auto leading-tight">
@@ -84,7 +84,7 @@ export default function LandingPage() {
 
                 <p className="text-lg md:text-xl text-text-secondary max-w-2xl mx-auto mb-10 leading-relaxed font-medium">
                     Devis, contrats, e-signature, facturation et assistant IA — simple, rapide, légal.
-                    Conçu pour les freelances francophones.
+                    Spécialement conçu pour respecter la législation française.
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
@@ -96,7 +96,7 @@ export default function LandingPage() {
                     </Button>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 text-sm font-bold text-text-text-muted">
+                <div className="flex flex-wrap items-center justify-center gap-8 md:gap-16 text-sm font-bold text-text-muted">
                     <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" /> 1 200+ freelances</div>
                     <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" /> 18 000 documents générés</div>
                     <div className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 text-success" /> 4.8/5 satisfaction</div>
@@ -169,13 +169,13 @@ export default function LandingPage() {
                             <h3 className="text-3xl font-bold mb-2 tracking-tight">Prezta Pro</h3>
                             <div className="flex items-baseline gap-1 mb-8">
                                 <span className="text-5xl font-black">14€</span>
-                                <span className="text-text-text-muted font-medium">/mois</span>
+                                <span className="text-text-muted font-medium">/mois</span>
                             </div>
                             <ul className="space-y-4 mb-8 text-text-secondary font-medium">
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Projets illimités</li>
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> E-signature Firma.dev incluse</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Assistant IA (200 messages/jour)</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Export comptable personnalisé</li>
+                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Assistant IA expert droit FR</li>
+                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Recherche INSEE (API SIRENE)</li>
                                 <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Support prioritaire</li>
                             </ul>
                             <Button className="w-full h-14 font-bold bg-brand text-white hover:bg-brand-hover text-lg shadow-md" onClick={() => navigate('/pricing')}>
@@ -191,7 +191,7 @@ export default function LandingPage() {
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
                     <div>
                         <div className="font-extrabold text-brand text-xl tracking-tight mb-2">Prezta</div>
-                        <p className="text-sm text-text-text-muted font-medium">Le workspace pour freelances francophones</p>
+                        <p className="text-sm text-text-muted font-medium">Le workspace pour freelances francophones</p>
                     </div>
                     <div className="flex gap-6 text-sm font-semibold text-text-secondary">
                         <a href="#features" className="hover:text-brand">Fonctionnalités</a>
@@ -199,8 +199,8 @@ export default function LandingPage() {
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/login')}>Connexion</span>
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/pricing')}>S'abonner</span>
                     </div>
-                    <div className="text-xs text-text-text-muted font-medium text-right">
-                        Données hébergées en Europe · RGPD<br />
+                    <div className="text-xs text-text-muted font-medium text-right">
+                        Made in France 🇫🇷 · Données hébergées en Europe<br />
                         © 2026 Prezta
                     </div>
                 </div>

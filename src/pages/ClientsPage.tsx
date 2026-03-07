@@ -74,7 +74,7 @@ export default function ClientsPage() {
                         <TableRow className="border-border hover:bg-transparent">
                             <TableHead className="text-text-muted">Nom / Entreprise</TableHead>
                             <TableHead className="text-text-muted">Contact</TableHead>
-                            <TableHead className="text-text-muted hidden md:table-cell">TVA</TableHead>
+                            <TableHead className="text-text-muted hidden md:table-cell">Infos Légales</TableHead>
                             <TableHead className="text-right text-text-muted">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -91,6 +91,11 @@ export default function ClientsPage() {
                                 <TableRow key={client.id} className="border-border hover:bg-surface2/50 transition-colors">
                                     <TableCell className="font-medium text-text">
                                         {client.name}
+                                        {client.legal_status && (
+                                            <span className="ml-2 text-[10px] bg-surface-hover px-1.5 py-0.5 rounded text-text-muted font-bold uppercase tracking-wider">
+                                                {client.legal_status}
+                                            </span>
+                                        )}
                                     </TableCell>
                                     <TableCell>
                                         <div className="flex flex-col gap-1 text-sm text-text-muted">
@@ -110,11 +115,15 @@ export default function ClientsPage() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="hidden md:table-cell text-text-muted text-sm">
-                                        {client.vat_number || '-'}
+                                        <div className="flex flex-col gap-0.5">
+                                            {client.siret && <span className="font-mono text-xs">SIRET: {client.siret}</span>}
+                                            {client.vat_number && <span className="font-mono text-xs">TVA: {client.vat_number}</span>}
+                                            {!client.siret && !client.vat_number && <span className="opacity-50 italic">-</span>}
+                                        </div>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                            <Button variant="ghost" size="icon" onClick={() => handleEdit(client)} className="h-8 w-8 text-text-text-muted hover:text-text-primary hover:bg-surface-hover" title="Modifier">
+                                            <Button variant="ghost" size="icon" onClick={() => handleEdit(client)} className="h-8 w-8 text-text-muted hover:text-text-primary hover:bg-surface-hover" title="Modifier">
                                                 <Pencil className="h-4 w-4" />
                                             </Button>
                                             <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(client.id, client.name)} className="h-8 w-8 text-danger hover:text-danger-hover hover:bg-danger-light" title="Supprimer">
