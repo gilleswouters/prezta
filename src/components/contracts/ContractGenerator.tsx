@@ -9,14 +9,19 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2, FileText, Check, AlertCircle, Edit3, Eye } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { trackEvent } from '@/lib/plausible';
 
 interface ContractGeneratorProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     project: any; // Ideally ProjectWithClient
+    /** UUID of the contract this new document is a version of (optional). */
+    versionOf?: string | null;
+    /** Version number to assign (defaults to 1). */
+    version?: number;
 }
 
-export function ContractGenerator({ open, onOpenChange, project }: ContractGeneratorProps) {
+export function ContractGenerator({ open, onOpenChange, project, versionOf, version }: ContractGeneratorProps) {
     const { data: templates, isLoading: templatesLoading } = useContractTemplates();
     const { data: profile } = useProfile();
     const { data: quote } = useQuoteByProject(project?.id);
@@ -26,13 +31,9 @@ export function ContractGenerator({ open, onOpenChange, project }: ContractGener
     const [previewContent, setPreviewContent] = useState<string>('');
     const [viewMode, setViewMode] = useState<'preview' | 'edit'>('preview');
 
-    const templatesByJurisdiction = useMemo(() => {
-        if (!templates) return {};
-        return templates.reduce((acc: any, t) => {
-            if (!acc[t.jurisdiction]) acc[t.jurisdiction] = [];
-            acc[t.jurisdiction].push(t);
-            return acc;
-        }, {});
+    const frTemplates = useMemo(() => {
+        if (!templates) return [];
+        return templates.filter(t => t.jurisdiction === 'FR');
     }, [templates]);
 
     const handleTemplateSelect = (id: string) => {
@@ -78,14 +79,20 @@ export function ContractGenerator({ open, onOpenChange, project }: ContractGener
         const template = templates?.find(t => t.id === selectedTemplateId);
         if (!template) return;
 
+        const versionNum = version ?? 1;
         await createContract.mutateAsync({
             project_id: project.id,
             template_id: template.id,
-            title: `Contrat - ${project.name}`,
+            title: versionNum > 1
+                ? `Contrat - ${project.name} (v${versionNum})`
+                : `Contrat - ${project.name}`,
             content: previewContent,
-            status: 'draft'
+            status: 'draft',
+            version: versionNum,
+            version_of: versionOf ?? null,
         });
 
+        trackEvent('contract_sent');
         onOpenChange(false);
     };
 
@@ -121,16 +128,12 @@ export function ContractGenerator({ open, onOpenChange, project }: ContractGener
                                         <p className="text-[10px] mt-2">Vérifiez la base de données.</p>
                                     </div>
                                 ) : (
-                                    Object.entries(templatesByJurisdiction).map(([jurisdiction, items]: [any, any]) => (
-                                        <SelectGroup key={jurisdiction}>
-                                            <SelectLabel className="bg-surface2 font-bold text-text-muted uppercase">
-                                                {jurisdiction === 'FR' ? 'France' : jurisdiction === 'BE' ? 'Belgique' : 'Suisse'}
-                                            </SelectLabel>
-                                            {items.map((t: any) => (
-                                                <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
-                                            ))}
-                                        </SelectGroup>
-                                    ))
+                                    <SelectGroup>
+                                        <SelectLabel className="bg-surface2 font-bold text-text-muted uppercase">🇫🇷 France</SelectLabel>
+                                        {frTemplates.map((t) => (
+                                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                        ))}
+                                    </SelectGroup>
                                 )}
                             </SelectContent>
                         </Select>

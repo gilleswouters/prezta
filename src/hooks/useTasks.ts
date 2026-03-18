@@ -15,7 +15,7 @@ export function useTasks(projectId?: string) {
                 *,
                 projects (
                     name,
-                    clients (name)
+                    clients (name, address)
                 )
             `)
             .eq('user_id', user.id)

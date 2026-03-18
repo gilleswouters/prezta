@@ -173,12 +173,13 @@ const styles = StyleSheet.create({
 interface InvoicePDFDocumentProps {
     invoice: Invoice;
     profile: Profile | null;
-    client?: any;
+    client?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    isPro?: boolean;
 }
 
-export function InvoicePDFDocument({ invoice, profile, client }: InvoicePDFDocumentProps) {
+export function InvoicePDFDocument({ invoice, profile, client, isPro = false }: InvoicePDFDocumentProps) {
     const today = new Date(invoice.created_at);
-    const legalMentions = getLegalMentions(profile);
+    const legalMentions = getLegalMentions(profile, 'invoice');
     const invoiceNumber = `FAC-${today.getFullYear()}-${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`; // Simple generation
 
     const clientName = client?.name || "Client";
@@ -296,6 +297,11 @@ export function InvoicePDFDocument({ invoice, profile, client }: InvoicePDFDocum
                     <Text style={styles.footerText}>
                         {legalMentions.join(' - ')}
                     </Text>
+                    {isPro && (
+                        <Text style={{ ...styles.footerText, marginTop: 3, color: '#6366F1' }}>
+                            Facture électronique conforme Factur-X / ZUGFeRD EN16931
+                        </Text>
+                    )}
                 </View>
 
             </Page>

@@ -6,6 +6,8 @@ import type { ProductFormValues } from '@/lib/validations/product';
 import { Unit, TVA_RATES } from '@/types/product';
 import type { Product } from '@/types/product';
 import { useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
+
+const PRODUCT_CATEGORIES = ['Développement', 'Design', 'Conseil', 'Formation', 'Maintenance', 'Autre'] as const;
 import { useProfile } from '@/hooks/useProfile';
 import { Country } from '@/types/profile';
 
@@ -52,7 +54,8 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
             description: '',
             unit_price: 0,
             tva_rate: rates[0],
-            unit: Unit.HEURE
+            unit: Unit.HEURE,
+            category: ''
         }
     });
 
@@ -67,7 +70,8 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 description: product.description || '',
                 unit_price: product.unit_price,
                 tva_rate: product.tva_rate,
-                unit: product.unit
+                unit: product.unit,
+                category: product.category || ''
             });
         } else if (!open && !isEditing) {
             reset({
@@ -75,7 +79,8 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 description: '',
                 unit_price: 0,
                 tva_rate: rates[0],
-                unit: Unit.HEURE
+                unit: Unit.HEURE,
+                category: ''
             });
         }
     }, [product, open, reset, isEditing, rates]);
@@ -88,6 +93,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 unit_price: data.unit_price,
                 tva_rate: data.tva_rate,
                 unit: data.unit as Unit,
+                category: data.category || null,
             };
 
             if (isEditing && product) {
@@ -150,7 +156,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                                                 <SelectValue placeholder="Sélect. TVA" />
                                             </SelectTrigger>
                                         </FormControl>
-                                        <SelectContent>
+                                        <SelectContent className="bg-white">
                                             {rates.map(rate => (
                                                 <SelectItem key={rate} value={String(rate)}>{rate}%</SelectItem>
                                             ))}
@@ -170,7 +176,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                                             <SelectValue placeholder="Unité" />
                                         </SelectTrigger>
                                     </FormControl>
-                                    <SelectContent>
+                                    <SelectContent className="bg-white">
                                         <SelectItem value={Unit.HEURE}>Heure</SelectItem>
                                         <SelectItem value={Unit.FORFAIT}>Forfait</SelectItem>
                                         <SelectItem value={Unit.PIECE}>Pièce</SelectItem>
@@ -193,6 +199,25 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                                         maxLength={200}
                                     />
                                 </FormControl>
+                                <FormMessage />
+                            </div>
+                        )} />
+
+                        <FormField control={form.control} name="category" render={({ field }) => (
+                            <div className="space-y-2">
+                                <FormLabel>Catégorie <span className="text-text-muted font-normal">(Optionnel)</span></FormLabel>
+                                <FormControl>
+                                    <Input
+                                        list="product-categories"
+                                        placeholder="Ex: Développement, Design..."
+                                        className="bg-surface2 border-border"
+                                        {...field}
+                                        value={field.value || ''}
+                                    />
+                                </FormControl>
+                                <datalist id="product-categories">
+                                    {PRODUCT_CATEGORIES.map(c => <option key={c} value={c} />)}
+                                </datalist>
                                 <FormMessage />
                             </div>
                         )} />

@@ -1,20 +1,38 @@
-import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, Clock, FileText } from 'lucide-react';
-import { useState } from 'react';
+import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, Clock, FileText, Mail, CalendarDays, BarChart2, FileArchive, AlertTriangle, Timer, CreditCard } from 'lucide-react';
+import { ActiveTimerWidget } from '@/components/time/ActiveTimerWidget';
+import { StorageBar } from '@/components/ui/StorageBar';
 import { ChatAssistant } from '@/components/ai/ChatAssistant';
+import { NotificationBell } from './NotificationBell';
+import { PLANS } from '@/lib/plans';
+import { useUIStore } from '@/stores/uiStore';
 
 export default function AppLayout() {
     const { user, signOut } = useAuth();
     const { data: subscription } = useSubscription();
     const navigate = useNavigate();
     const location = useLocation();
-    const [isChatOpen, setIsChatOpen] = useState(false);
+    const { isChatOpen, openChat, closeChat } = useUIStore();
+
+    // Trial banner calculation
+    const isTrial = !subscription?.plan || subscription.plan === 'trial';
+    const trialDaysTotal = PLANS.trial.trialDays; // 14
+    const accountCreatedAt = user?.created_at ? new Date(user.created_at) : null;
+    const trialDaysRemaining = accountCreatedAt
+        ? Math.max(-1, trialDaysTotal - Math.floor((Date.now() - accountCreatedAt.getTime()) / 86_400_000))
+        : null;
+    const showTrialBanner = isTrial && trialDaysRemaining !== null;
 
     // Map route to title
     const getPageTitle = (pathname: string) => {
+        if (pathname === '/temps') return 'Suivi du temps';
+        if (pathname === '/planning') return 'Planning hebdomadaire';
+        if (pathname === '/revenus') return 'Tableau de bord revenus';
+        if (pathname === '/calculateur') return 'Calculateur de prix';
+        if (pathname === '/export-comptable') return 'Export comptable';
         if (pathname === '/dashboard') return 'Tableau de bord';
         if (pathname === '/templates') return 'Modèles de contrats';
         if (pathname.includes('/projets')) return 'Projets';
@@ -22,6 +40,8 @@ export default function AppLayout() {
         if (pathname.includes('/catalogue')) return 'Catalogue';
         if (pathname.includes('/registre')) return 'Registre';
         if (pathname.includes('/profil')) return 'Profil';
+        if (pathname.includes('/parametres/emails')) return 'Modèles d\'e-mails';
+        if (pathname.includes('/parametres/abonnement')) return 'Abonnement';
         return 'Prezta';
     };
 
@@ -30,7 +50,9 @@ export default function AppLayout() {
             group: 'Principal',
             items: [
                 { label: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
+                { label: 'Revenus', path: '/revenus', icon: <BarChart2 className="h-4 w-4" /> },
                 { label: 'Calendrier', path: '/calendrier', icon: <Clock className="h-4 w-4" /> },
+                { label: 'Planning', path: '/planning', icon: <CalendarDays className="h-4 w-4" /> },
                 { label: 'Projets', path: '/projets', icon: <FolderKanban className="h-4 w-4" /> },
                 { label: 'Clients', path: '/clients', icon: <Users className="h-4 w-4" /> },
             ]
@@ -44,9 +66,18 @@ export default function AppLayout() {
             ]
         },
         {
+            group: 'Outils',
+            items: [
+                { label: 'Suivi temps', path: '/temps', icon: <Timer className="h-4 w-4" /> },
+                { label: 'Export comptable', path: '/export-comptable', icon: <FileArchive className="h-4 w-4" /> },
+            ]
+        },
+        {
             group: 'Compte',
             items: [
                 { label: 'Profil', path: '/profil', icon: <User className="h-4 w-4" /> },
+                { label: 'E-mails', path: '/parametres/emails', icon: <Mail className="h-4 w-4" /> },
+                { label: 'Abonnement', path: '/parametres/abonnement', icon: <CreditCard className="h-4 w-4" /> },
             ]
         }
     ];
@@ -97,6 +128,9 @@ export default function AppLayout() {
                     </nav>
                 </div>
 
+                {/* Storage mini-bar */}
+                <StorageBar compact />
+
                 {/* Footer User */}
                 <div className="p-4 border-t border-[var(--sidebar-border)] w-full flex items-center justify-between gap-3 shrink-0">
                     <div className="flex-1 flex flex-col overflow-hidden leading-tight">
@@ -105,7 +139,7 @@ export default function AppLayout() {
                         </span>
                         <div className="flex items-center gap-1.5 overflow-hidden">
                             <span className="text-[10px] font-medium text-[var(--text-muted)] truncate">
-                                Membre Prezta
+                                {subscription?.plan === 'pro' ? 'Plan Pro' : subscription?.plan === 'starter' ? 'Plan Starter' : 'Essai gratuit'}
                             </span>
                             {subscription?.isPro && (
                                 <span className="bg-[var(--brand-light)] text-[var(--brand)] text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase shrink-0">
@@ -129,10 +163,12 @@ export default function AppLayout() {
                         {getPageTitle(location.pathname)}
                     </h1>
                     <div className="flex items-center gap-3 shrink-0">
+                        <ActiveTimerWidget />
+                        <NotificationBell />
                         <Button
                             variant="outline"
                             className="bg-white border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] text-xs h-9 font-semibold"
-                            onClick={() => setIsChatOpen(true)}
+                            onClick={() => openChat()}
                         >
                             <Sparkles className="h-3.5 w-3.5 mr-2 text-[var(--brand)]" />
                             ✦ Assistant IA
@@ -147,6 +183,28 @@ export default function AppLayout() {
                     </div>
                 </header>
 
+                {/* Trial countdown banner */}
+                {showTrialBanner && (
+                    trialDaysRemaining > 0 ? (
+                        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm font-medium shrink-0">
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                            Votre essai gratuit expire dans{' '}
+                            <strong>{trialDaysRemaining} jour{trialDaysRemaining > 1 ? 's' : ''}</strong>.{' '}
+                            <Link to="/pricing" className="underline font-bold hover:text-amber-900">
+                                Choisir un plan →
+                            </Link>
+                        </div>
+                    ) : (
+                        <div className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200 text-red-800 text-sm font-medium shrink-0">
+                            <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
+                            Votre essai gratuit a expiré.{' '}
+                            <Link to="/pricing" className="underline font-bold hover:text-red-900">
+                                Choisissez un plan pour continuer →
+                            </Link>
+                        </div>
+                    )
+                )}
+
                 {/* Page content */}
                 <div className="flex-1 overflow-y-auto p-6 md:p-8 w-full max-w-full relative isolate z-0">
                     <div className="max-w-7xl mx-auto w-full">
@@ -155,8 +213,7 @@ export default function AppLayout() {
                 </div>
             </main>
 
-            {/* Chat Assistant Overlay */}
-            <ChatAssistant isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+            <ChatAssistant isOpen={isChatOpen} onClose={() => closeChat()} />
         </div>
     );
 }

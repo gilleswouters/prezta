@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
-import type { QuoteData } from '@/types/quote';
+import type { QuoteData, QuoteStatus } from '@/types/quote';
 
 // Fetch quote for a specific project
 export const useQuoteByProject = (projectId: string | undefined) => {
@@ -90,5 +90,48 @@ export const useSaveQuote = () => {
             console.error("Erreur sauvegarde devis:", error);
             toast.error("Impossible d'enregistrer le devis.");
         }
+    });
+};
+
+export const useUpdateQuoteStatus = () => {
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            id,
+            status,
+            signatureId,
+        }: {
+            id: string;
+            status: QuoteStatus;
+            signatureId?: string;
+        }) => {
+            if (!user?.id) throw new Error("Non authentifié");
+
+            const updates: Record<string, unknown> = {
+                status,
+                ...(status === 'sent' ? { sent_at: new Date().toISOString() } : {}),
+                ...(signatureId !== undefined ? { signature_id: signatureId } : {}),
+            };
+
+            const { data, error } = await supabase
+                .from('quotes')
+                .update(updates)
+                .eq('id', id)
+                .eq('user_id', user.id)
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['quote'] });
+        },
+        onError: (error) => {
+            console.error("Erreur mise à jour statut devis:", error);
+            toast.error("Impossible de mettre à jour le statut du devis.");
+        },
     });
 };

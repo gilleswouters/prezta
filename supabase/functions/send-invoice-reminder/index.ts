@@ -12,18 +12,39 @@ serve(async (req) => {
     }
 
     try {
-        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-        const resendApiKey = Deno.env.get('RESEND_API_KEY')!
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
+        const resendApiKey = Deno.env.get('RESEND_API_KEY')
+
+        if (!supabaseUrl || !supabaseKey) {
+            console.error('[send-invoice-reminder] Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY')
+            return new Response(JSON.stringify({ error: 'Server configuration error' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 500,
+            })
+        }
 
         const supabase = createClient(supabaseUrl, supabaseKey)
 
         // Verifier auth utilisateur
-        const authHeader = req.headers.get('Authorization')!
-        const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''))
+        const authHeader = req.headers.get('Authorization')
+        const apiKeyHeader = req.headers.get('apikey')
+        const token = authHeader?.replace('Bearer ', '') ?? apiKeyHeader
+
+        if (!token) {
+            return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 401,
+            })
+        }
+
+        const { data: { user }, error: authError } = await supabase.auth.getUser(token)
 
         if (authError || !user) {
-            throw new Error('Non autorisé')
+            return new Response(JSON.stringify({ error: 'Non autorisé' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+                status: 401,
+            })
         }
 
         const { invoice_id } = await req.json()
@@ -118,7 +139,7 @@ serve(async (req) => {
         }
 
         // Update last_reminder_date and status if needed
-        const updates: any = { last_reminder_date: new Date().toISOString() };
+        const updates: { last_reminder_date: string; status?: string } = { last_reminder_date: new Date().toISOString() };
         if (invoice.due_date && new Date(invoice.due_date) < new Date() && invoice.status === 'en_attente') {
             updates.status = 'en_retard';
         }
@@ -130,11 +151,11 @@ serve(async (req) => {
             status: 200,
         })
 
-    } catch (error: any) {
-        console.error('Erreur Serveur:', error.message)
-        return new Response(JSON.stringify({ error: error.message }), {
+    } catch (error: unknown) {
+        console.error('[send-invoice-reminder] error:', error)
+        return new Response(JSON.stringify({ error: 'Une erreur est survenue. Veuillez réessayer.' }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            status: 400,
+            status: 500,
         })
     }
 })

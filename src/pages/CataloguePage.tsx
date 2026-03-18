@@ -1,9 +1,13 @@
 import { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useProducts, useDeleteProduct, useToggleFavorite } from '@/hooks/useProducts';
 import type { Product } from '@/types/product';
 import { Unit } from '@/types/product';
 import { ProductModal } from '@/components/products/ProductModal';
 import { AiCatalogGenerator } from '@/components/products/AiCatalogGenerator';
+import { BenchmarkModal } from '@/components/catalogue/BenchmarkModal';
+import { usePlanLimits } from '@/hooks/usePlanLimits';
+import CostCalculatorPage from '@/pages/CostCalculatorPage';
 
 import {
     Table,
@@ -26,20 +30,33 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Loader2, Pencil, Trash2, Search, Star, Sparkles } from 'lucide-react';
+import { Plus, Loader2, Pencil, Trash2, Search, Star, Sparkles, BarChart2, Lock, FileSpreadsheet } from 'lucide-react';
+import { ImportCatalogueModal } from '@/components/ImportCatalogueModal';
 
 export default function CataloguePage() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const activeTab = searchParams.get('tab') === 'calculateur' ? 'calculateur' : 'prestations';
     const { data: products, isLoading } = useProducts();
     const deleteProduct = useDeleteProduct();
     const toggleFavorite = useToggleFavorite();
+    const { canUseAI } = usePlanLimits();
 
     const [modalOpen, setModalOpen] = useState(false);
     const [aiModalOpen, setAiModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+    const [benchmarkProduct, setBenchmarkProduct] = useState<Product | null>(null);
 
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedUnit, setSelectedUnit] = useState<string>('all');
+    const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+    const [importModalOpen, setImportModalOpen] = useState(false);
+
+    const categories = useMemo(() => {
+        const cats = new Set<string>();
+        products?.forEach(p => { if (p.category) cats.add(p.category); });
+        return Array.from(cats).sort();
+    }, [products]);
 
     const filteredProducts = useMemo(() => {
         if (!products) return [];
@@ -47,9 +64,10 @@ export default function CataloguePage() {
             const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
             const matchesUnit = selectedUnit === 'all' || p.unit === selectedUnit;
-            return matchesSearch && matchesUnit;
+            const matchesCategory = !selectedCategory || p.category === selectedCategory;
+            return matchesSearch && matchesUnit && matchesCategory;
         });
-    }, [products, searchQuery, selectedUnit]);
+    }, [products, searchQuery, selectedUnit, selectedCategory]);
 
     const handleCreateNew = () => {
         setEditingProduct(null);
@@ -86,6 +104,29 @@ export default function CataloguePage() {
     return (
         <div className="space-y-6">
 
+            {/* Tab bar */}
+            <div className="flex items-center gap-1 border-b border-border pb-0">
+                {(['prestations', 'calculateur'] as const).map((tab) => (
+                    <button
+                        key={tab}
+                        onClick={() => setSearchParams(tab === 'prestations' ? {} : { tab })}
+                        className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                            activeTab === tab
+                                ? 'border-brand text-brand'
+                                : 'border-transparent text-text-muted hover:text-text'
+                        }`}
+                    >
+                        {tab === 'prestations' ? 'Prestations' : 'Calculateur de prix'}
+                    </button>
+                ))}
+            </div>
+
+            {/* Calculateur tab */}
+            {activeTab === 'calculateur' && <CostCalculatorPage />}
+
+            {/* Prestations tab */}
+            {activeTab === 'prestations' && <>
+
             {/* HEADER SECTION */}
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
@@ -100,6 +141,10 @@ export default function CataloguePage() {
                             IA
                         </Button>
                     )}
+                    <Button variant="outline" onClick={() => setImportModalOpen(true)} className="border-border text-text hover:bg-surface-hover">
+                        <FileSpreadsheet className="mr-2 h-4 w-4" />
+                        Importer (CSV)
+                    </Button>
                     <Button onClick={handleCreateNew} className="bg-p3 text-bg hover:opacity-90">
                         <Plus className="mr-2 h-4 w-4" />
                         Nouvelle Prestation
@@ -152,6 +197,26 @@ export default function CataloguePage() {
                         </Tabs>
                     </div>
 
+                    {categories.length > 0 && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                                onClick={() => setSelectedCategory(null)}
+                                className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${!selectedCategory ? 'bg-brand text-white' : 'bg-surface2 border border-border text-text-muted hover:bg-surface-hover'}`}
+                            >
+                                Toutes
+                            </button>
+                            {categories.map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider transition-colors ${selectedCategory === cat ? 'bg-brand text-white' : 'bg-surface2 border border-border text-text-muted hover:bg-surface-hover'}`}
+                                >
+                                    {cat}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
                     <div className="rounded-md border border-border bg-surface overflow-hidden">
                         <Table>
                             <TableHeader>
@@ -198,7 +263,29 @@ export default function CataloguePage() {
                                                 {product.tva_rate}%
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <div className="flex items-center justify-end gap-2">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {/* Benchmark — Pro gate */}
+                                                    {canUseAI ? (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-text-muted hover:text-brand hover:bg-brand-light"
+                                                            title="Benchmark marché"
+                                                            onClick={() => setBenchmarkProduct(product)}
+                                                        >
+                                                            <BarChart2 className="h-4 w-4" />
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8 text-amber-400 opacity-60 cursor-not-allowed"
+                                                            title="Fonctionnalité Pro — Passez au plan Pro pour accéder au benchmark marché"
+                                                            disabled
+                                                        >
+                                                            <Lock className="h-3.5 w-3.5" />
+                                                        </Button>
+                                                    )}
                                                     <Button variant="ghost" size="icon" onClick={() => handleEdit(product)} className="h-8 w-8 text-text-text-muted hover:text-text-primary hover:bg-surface-hover" title="Modifier">
                                                         <Pencil className="h-4 w-4" />
                                                     </Button>
@@ -217,7 +304,8 @@ export default function CataloguePage() {
                 </div>
             )}
 
-            {/* DIALOGS */}
+            {/* DIALOGS (always mounted for correct modal state) */}
+            </>}
             <ProductModal
                 open={modalOpen}
                 onOpenChange={setModalOpen}
@@ -228,6 +316,23 @@ export default function CataloguePage() {
                 open={aiModalOpen}
                 onOpenChange={setAiModalOpen}
             />
+
+            <ImportCatalogueModal
+                open={importModalOpen}
+                onOpenChange={setImportModalOpen}
+            />
+
+            {benchmarkProduct && (
+                <BenchmarkModal
+                    open={!!benchmarkProduct}
+                    onOpenChange={open => { if (!open) setBenchmarkProduct(null); }}
+                    product={benchmarkProduct}
+                    onEditProduct={product => {
+                        setBenchmarkProduct(null);
+                        handleEdit(product);
+                    }}
+                />
+            )}
 
             <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
                 <AlertDialogContent className="bg-surface text-text border-border">

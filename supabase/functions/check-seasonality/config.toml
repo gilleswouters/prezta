@@ -1,0 +1,2 @@
+[functions.check-seasonality]
+verify_jwt = false

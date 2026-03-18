@@ -10,7 +10,10 @@ import { ContractPDFDocument } from '@/components/contracts/pdf/ContractPDFDocum
 import { useProfile } from '@/hooks/useProfile';
 import { useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
+import { generateDocumentName } from '@/lib/document-naming';
 import type { QuoteLine, QuoteTotals } from '@/types/quote';
+import type { Client } from '@/types/client';
 
 // Helper for Quote Totals
 const calculateQuoteTotals = (lines: QuoteLine[] | any[]): QuoteTotals => {
@@ -70,7 +73,7 @@ export default function ClientPortalPage() {
     }
 
     const { project, quotes, invoices, contracts } = data;
-    const client = project.clients as any;
+    const client = project.clients as Client | null;
 
     return (
         <div className="min-h-screen bg-bg relative selection:bg-brand/20 selection:text-brand">
@@ -92,6 +95,15 @@ export default function ClientPortalPage() {
                     </div>
                 </div>
             </header>
+
+            {/* Quote read-tracking pixel — marks sent quotes as 'lu' when portal is opened */}
+            <img
+                src={`/api/track-quote-view?token=${portalLink}`}
+                alt=""
+                width="1"
+                height="1"
+                className="sr-only"
+            />
 
             <main className="pt-24 pb-16 container mx-auto px-4 sm:px-6 lg:px-8 max-w-5xl">
                 {/* Greeting */}
@@ -125,14 +137,7 @@ export default function ClientPortalPage() {
                                                     <span>•</span>
                                                     <span>{format(new Date(quote.created_at), 'dd MMM yyyy', { locale: fr })}</span>
                                                     <span>•</span>
-                                                    <span className={`font-semibold ${quote.status === 'accepted' ? 'text-green-600' :
-                                                        quote.status === 'rejected' ? 'text-red-500' :
-                                                            'text-orange-500'
-                                                        }`}>
-                                                        {quote.status === 'accepted' ? 'Accepté' :
-                                                            quote.status === 'rejected' ? 'Refusé' :
-                                                                'En attente'}
-                                                    </span>
+                                                    <DocumentStatusBadge status={quote.status ?? 'draft'} />
                                                 </div>
                                             </div>
                                             <PDFDownloadLink
@@ -143,7 +148,7 @@ export default function ClientPortalPage() {
                                                         profile={profile || null}
                                                     />
                                                 }
-                                                fileName={`Devis_${quote.quote_number || quote.title.replace(/\s+/g, '_')}.pdf`}
+                                                fileName={generateDocumentName('Devis', client?.name ?? 'CLIENT', quote.created_at, (quote as Record<string, unknown>).version as number ?? 1)}
                                                 className="inline-flex items-center justify-center px-4 py-2 bg-brand/10 text-brand hover:bg-brand hover:text-white rounded-lg transition-colors font-medium text-sm whitespace-nowrap"
                                             >
                                                 {({ loading }) => (
@@ -171,14 +176,7 @@ export default function ClientPortalPage() {
                                                 <div className="flex items-center gap-2 mt-1 text-sm text-text-muted">
                                                     <span>{format(new Date(contract.created_at), 'dd MMM yyyy', { locale: fr })}</span>
                                                     <span>•</span>
-                                                    <span className={`font-semibold ${contract.status === 'signed' ? 'text-green-600' :
-                                                        contract.status === 'sent' ? 'text-blue-600' :
-                                                            'text-text-muted'
-                                                        }`}>
-                                                        {contract.status === 'signed' ? 'Signé' :
-                                                            contract.status === 'sent' ? 'En attente de signature' :
-                                                                'Brouillon'}
-                                                    </span>
+                                                    <DocumentStatusBadge status={contract.status} />
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -194,7 +192,7 @@ export default function ClientPortalPage() {
                                                 )}
                                                 <PDFDownloadLink
                                                     document={<ContractPDFDocument contract={contract} profile={profile || null} />}
-                                                    fileName={`Contrat_${contract.title.replace(/\s+/g, '_')}.pdf`}
+                                                    fileName={generateDocumentName('Contrat-prestation', client?.name ?? 'CLIENT', contract.created_at, (contract as Record<string, unknown>).version as number ?? 1)}
                                                     className="inline-flex items-center justify-center h-9 w-9 bg-surface2 text-text hover:bg-brand/10 hover:text-brand rounded-lg transition-colors"
                                                     title="Télécharger"
                                                 >
@@ -226,14 +224,7 @@ export default function ClientPortalPage() {
                                                     <span>•</span>
                                                     <span>{format(new Date(invoice.issue_date), 'dd MMM yyyy', { locale: fr })}</span>
                                                     <span>•</span>
-                                                    <span className={`font-semibold ${invoice.status === 'paid' ? 'text-green-600' :
-                                                        invoice.status === 'overdue' ? 'text-red-500' :
-                                                            'text-orange-500'
-                                                        }`}>
-                                                        {invoice.status === 'paid' ? 'Payée' :
-                                                            invoice.status === 'overdue' ? 'En retard' :
-                                                                'En attente de paiement'}
-                                                    </span>
+                                                    <DocumentStatusBadge status={invoice.status} />
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -244,7 +235,7 @@ export default function ClientPortalPage() {
                                                 )}
                                                 <PDFDownloadLink
                                                     document={<InvoicePDFDocument invoice={invoice} profile={profile || null} client={client} />}
-                                                    fileName={`Facture_${invoice.invoice_number}.pdf`}
+                                                    fileName={generateDocumentName('Facture', client?.name ?? 'CLIENT', invoice.created_at ?? new Date().toISOString(), 1)}
                                                     className="inline-flex items-center justify-center h-9 w-9 bg-surface2 text-text hover:bg-brand/10 hover:text-brand rounded-lg transition-colors"
                                                     title="Télécharger"
                                                 >

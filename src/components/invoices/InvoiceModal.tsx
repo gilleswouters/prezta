@@ -30,7 +30,7 @@ import { InvoiceStatus, type Invoice, type InvoiceFormData } from '@/types/invoi
 const invoiceSchema = z.object({
     project_id: z.string().optional().nullable(),
     amount: z.coerce.number().min(0, "Le montant doit être positif"),
-    status: z.enum([InvoiceStatus.PAID, InvoiceStatus.PENDING, InvoiceStatus.LATE]),
+    status: z.enum([InvoiceStatus.PAID, InvoiceStatus.PENDING, InvoiceStatus.LATE, InvoiceStatus.ARCHIVED]),
     due_date: z.string().optional().nullable(),
     paid_date: z.string().optional().nullable(),
     notes: z.string().optional().nullable(),
@@ -42,9 +42,15 @@ interface InvoiceModalProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     invoice?: Invoice;
+    defaultValues?: {
+        project_id?: string | null;
+        amount?: number;
+        notes?: string;
+    };
+    onCreated?: () => void;
 }
 
-export function InvoiceModal({ open, onOpenChange, invoice }: InvoiceModalProps) {
+export function InvoiceModal({ open, onOpenChange, invoice, defaultValues, onCreated }: InvoiceModalProps) {
     const createInvoice = useCreateInvoice();
     const updateInvoice = useUpdateInvoice();
     const { data: projects } = useProjects();
@@ -77,12 +83,12 @@ export function InvoiceModal({ open, onOpenChange, invoice }: InvoiceModalProps)
                 });
             } else {
                 form.reset({
-                    project_id: 'none',
-                    amount: 0,
+                    project_id: defaultValues?.project_id ?? 'none',
+                    amount: defaultValues?.amount ?? 0,
                     status: InvoiceStatus.PENDING,
                     due_date: '',
                     paid_date: '',
-                    notes: '',
+                    notes: defaultValues?.notes ?? '',
                 });
             }
         }
@@ -104,6 +110,7 @@ export function InvoiceModal({ open, onOpenChange, invoice }: InvoiceModalProps)
                 await updateInvoice.mutateAsync({ id: invoice.id, updates: payload });
             } else {
                 await createInvoice.mutateAsync(payload);
+                onCreated?.();
             }
             onOpenChange(false);
         } catch (error) {

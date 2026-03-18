@@ -1,0 +1,2 @@
+[functions.generate-quote-brief]
+verify_jwt = false

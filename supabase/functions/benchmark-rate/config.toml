@@ -1,0 +1,2 @@
+[functions.benchmark-rate]
+verify_jwt = false

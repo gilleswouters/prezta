@@ -2,17 +2,29 @@ import React from 'react';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { ProjectWithClient } from '@/types/project';
 import { ProjectStatus } from '@/types/project';
+import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { ProjectKanban } from '@/components/tasks/ProjectKanban';
+import { ProjectTaskList } from '@/components/tasks/ProjectTaskList';
+import { SendForSignatureModal } from '@/components/contracts/SendForSignatureModal';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock } from 'lucide-react';
+import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock, Download, Archive, Send, AlertCircle, Loader2 } from 'lucide-react';
+import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
-import { useQuoteByProject } from '@/hooks/useQuotes';
+import { useQueryClient } from '@tanstack/react-query';
+import { useQuoteByProject, useUpdateQuoteStatus } from '@/hooks/useQuotes';
 import { useProjectContracts } from '@/hooks/useContracts';
 import { useInvoices } from '@/hooks/useInvoices';
+import { useProfile } from '@/hooks/useProfile';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
+import { trackEvent } from '@/lib/plausible';
+import { generateDocumentName } from '@/lib/document-naming';
+import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
+import { QuotePDFDocument } from '@/components/quotes/pdf/QuotePDFDocument';
+import type { QuoteData, QuoteLine, QuoteTotals } from '@/types/quote';
 
 interface ProjectDashboardModalProps {
     open: boolean;
@@ -20,7 +32,7 @@ interface ProjectDashboardModalProps {
     project: ProjectWithClient | null;
     onEdit: () => void;
     onOpenContracts: () => void;
-    defaultTab?: "overview" | "tasks" | "documents";
+    defaultTab?: "overview" | "tasks" | "documents" | "quotes";
 }
 
 export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onOpenContracts, defaultTab = "overview" }: ProjectDashboardModalProps) {
@@ -31,6 +43,18 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     const { data: quote, isLoading: quoteLoading } = useQuoteByProject(project?.id);
     const { data: contracts, isLoading: contractsLoading } = useProjectContracts(project?.id);
     const { data: invoices, isLoading: invoicesLoading } = useInvoices(project?.id);
+    const { data: profile } = useProfile();
+    const updateQuoteStatus = useUpdateQuoteStatus();
+    const queryClient = useQueryClient();
+    const { user } = useAuth();
+
+    // Portal state
+    const [isTogglingPortal, setIsTogglingPortal] = React.useState(false);
+
+    // Devis tab: FIRMA send state
+    const [quoteSendModalOpen, setQuoteSendModalOpen] = React.useState(false);
+    const [quoteSending, setQuoteSending] = React.useState(false);
+    const [quoteSignerError, setQuoteSignerError] = React.useState(false);
 
     React.useEffect(() => {
         if (open) {
@@ -84,6 +108,138 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
         return docs.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
     }, [quote, contracts, invoices]);
 
+    // ── Devis tab helpers ─────────────────────────────────────────────────────
+
+    function calcQuoteTotals(lines: QuoteLine[]): QuoteTotals {
+        const tvaAmounts: Record<string, number> = {};
+        let subtotalHT = 0;
+        for (const l of lines) {
+            const lineHT = (l.quantity || 0) * (l.unitPrice || 0);
+            subtotalHT += lineHT;
+            const rate = String(l.tvaRate || 0);
+            tvaAmounts[rate] = (tvaAmounts[rate] || 0) + lineHT * (l.tvaRate || 0) / 100;
+        }
+        const totalTVA = Object.values(tvaAmounts).reduce((a, b) => a + b, 0);
+        return { subtotalHT, tvaAmounts, totalTVA, totalTTC: subtotalHT + totalTVA };
+    }
+
+    const handleRequestQuoteSend = () => {
+        if (!project?.clients?.contact_name) {
+            setQuoteSignerError(true);
+            return;
+        }
+        setQuoteSignerError(false);
+        setQuoteSendModalOpen(true);
+    };
+
+    const handleSendQuoteToFirma = async () => {
+        if (!quote) return;
+        const toastId = toast.loading('Génération du document (1/2)...');
+        setQuoteSending(true);
+
+        const quoteLines: QuoteLine[] = Array.isArray(quote.lines) ? (quote.lines as QuoteLine[]) : [];
+        const quoteData: QuoteData = {
+            id: quote.id,
+            title: quote.title,
+            projectId: quote.project_id,
+            lines: quoteLines,
+            notes: quote.notes ?? '',
+            version: quote.version ?? 1,
+            created_at: quote.created_at,
+        };
+        const totals = calcQuoteTotals(quoteLines);
+
+        try {
+            const blob = await pdf(
+                <QuotePDFDocument data={quoteData} totals={totals} profile={profile ?? null} />
+            ).toBlob();
+
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+
+            reader.onloadend = async () => {
+                try {
+                    const base64data = reader.result?.toString().split(',')[1];
+                    if (!base64data) throw new Error('Erreur de conversion PDF');
+
+                    toast.loading('Envoi sécurisé via Firma.dev (2/2)...', { id: toastId });
+
+                    const clientEmail = project?.clients?.email;
+                    if (!clientEmail) throw new Error("Le client n'a pas d'adresse e-mail définie.");
+
+                    const clientName = project!.clients!.contact_name!;
+
+                    const { data: firmaData, error: firmaError } = await supabase.functions.invoke('firma-signature', {
+                        headers: {
+                            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                        },
+                        body: { pdfBase64: base64data, title: quote.title, clientName, clientEmail },
+                    });
+
+                    if (firmaError) throw firmaError;
+
+                    const body = firmaData as { firmaId?: string; error?: string } | null;
+                    if (body?.error) throw new Error(body.error);
+
+                    await updateQuoteStatus.mutateAsync({
+                        id: quote.id,
+                        status: 'sent',
+                        signatureId: body?.firmaId,
+                    });
+
+                    trackEvent('signature_requested');
+                    toast.success('Envoyé pour signature avec succès !', { id: toastId });
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : "Erreur lors de l'envoi";
+                    toast.error(message, { id: toastId });
+                } finally {
+                    setQuoteSending(false);
+                }
+            };
+
+            reader.onerror = () => {
+                toast.error('Erreur de lecture du PDF', { id: toastId });
+                setQuoteSending(false);
+            };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Erreur lors de l'envoi";
+            toast.error(message, { id: toastId });
+            setQuoteSending(false);
+        }
+    };
+
+    const handleTogglePortal = async () => {
+        if (!project) return;
+        setIsTogglingPortal(true);
+        try {
+            const { error } = await supabase
+                .from('projects')
+                .update({ portal_enabled: !project.portal_enabled })
+                .eq('id', project.id);
+            if (error) throw error;
+            queryClient.invalidateQueries({ queryKey: ['projects', user?.id] });
+        } catch {
+            toast.error("Impossible de modifier le portail.");
+        } finally {
+            setIsTogglingPortal(false);
+        }
+    };
+
+    const handleResetPortalLink = async () => {
+        if (!project) return;
+        const newLink = crypto.randomUUID();
+        const { error } = await supabase
+            .from('projects')
+            .update({ portal_link: newLink })
+            .eq('id', project.id);
+        if (error) {
+            toast.error("Impossible de réinitialiser le lien.");
+        } else {
+            queryClient.invalidateQueries({ queryKey: ['projects', user?.id] });
+            toast.success("Lien réinitialisé — l'ancien lien ne fonctionne plus.");
+        }
+    };
+
     if (!project) return null;
 
     const StatusBadge = ({ status }: { status: string }) => {
@@ -104,31 +260,9 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     const isLoadingDocs = quoteLoading || contractsLoading || invoicesLoading;
     const hasDocuments = combinedDocuments.length > 0;
 
-    const translateDocStatus = (type: string, status: string) => {
-        if (type === 'invoice') {
-            switch (status) {
-                case 'en_attente': return <span className="text-orange-600 bg-orange-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">En attente</span>;
-                case 'payé': return <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Payé</span>;
-                case 'en_retard': return <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">En retard</span>;
-            }
-        }
-        if (type === 'contract') {
-            switch (status) {
-                case 'draft': return <span className="text-gray-600 bg-gray-100 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Brouillon</span>;
-                case 'sent': return <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Envoyé</span>;
-                case 'signed': return <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Signé</span>;
-            }
-        }
-        if (type === 'quote') {
-            switch (status) {
-                case 'draft': return <span className="text-gray-600 bg-gray-100 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Brouillon</span>;
-                case 'sent': return <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Envoyé</span>;
-                case 'accepted': return <span className="text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Accepté</span>;
-                case 'rejected': return <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider">Refusé</span>;
-            }
-        }
-        return <span className="text-gray-500 bg-gray-100 px-2 py-0.5 rounded text-xs uppercase font-bold">{status}</span>;
-    };
+    const translateDocStatus = (status: string) => (
+        <DocumentStatusBadge status={status} />
+    );
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -183,6 +317,12 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 <FolderKanban className="h-4 w-4 mr-2" /> Pipeline des Tâches
                             </TabsTrigger>
                             <TabsTrigger
+                                value="quotes"
+                                className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--brand)] data-[state=active]:bg-transparent data-[state=active]:shadow-none py-3 px-1"
+                            >
+                                <FileText className="h-4 w-4 mr-2" /> Devis
+                            </TabsTrigger>
+                            <TabsTrigger
                                 value="documents"
                                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--brand)] data-[state=active]:bg-transparent data-[state=active]:shadow-none py-3 px-1"
                             >
@@ -220,11 +360,60 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                 </p>
                                             </div>
                                             <div>
-                                                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Lien Sécurisé</p>
-                                                <a href={`/portal/${project.portal_link}`} target="_blank" rel="noreferrer" className="text-indigo-600 hover:underline text-sm font-medium flex items-center gap-1.5">
-                                                    <LinkIcon className="h-3.5 w-3.5" /> Ouvrir le portail
-                                                </a>
+                                                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-1">Portail Client</p>
+                                                <span className={`inline-flex items-center gap-1.5 text-sm font-medium ${project.portal_enabled ? 'text-emerald-600' : 'text-text-muted'}`}>
+                                                    <span className={`h-2 w-2 rounded-full ${project.portal_enabled ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+                                                    {project.portal_enabled ? 'Actif' : 'Désactivé'}
+                                                </span>
                                             </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Portal Card */}
+                                <div className="bg-white rounded-xl border border-border p-5 shadow-sm lg:col-span-3">
+                                    <div className="flex items-center justify-between gap-4">
+                                        <div className="flex items-center gap-3 min-w-0">
+                                            <div className="h-9 w-9 rounded-lg bg-indigo-50 border border-indigo-100 flex items-center justify-center shrink-0">
+                                                <Share2 className="h-4 w-4 text-indigo-600" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="font-semibold text-sm text-text-primary">Portail Client</p>
+                                                <p className="text-xs text-text-muted truncate">
+                                                    {project.portal_enabled
+                                                        ? `Actif${project.portal_expires_at ? ` — expire le ${format(new Date(project.portal_expires_at), 'd MMM yyyy', { locale: fr })}` : ''}`
+                                                        : 'Désactivé — votre client ne peut pas accéder aux documents'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 shrink-0">
+                                            {project.portal_enabled && (
+                                                <>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8 text-xs"
+                                                        onClick={handleShare}
+                                                    >
+                                                        <LinkIcon className="h-3.5 w-3.5 mr-1.5" />
+                                                        Copier le lien
+                                                    </Button>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-8 text-xs text-text-muted hover:text-danger"
+                                                        onClick={handleResetPortalLink}
+                                                    >
+                                                        Réinitialiser
+                                                    </Button>
+                                                </>
+                                            )}
+                                            <Switch
+                                                checked={project.portal_enabled ?? false}
+                                                onCheckedChange={handleTogglePortal}
+                                                disabled={isTogglingPortal}
+                                                className="data-[state=checked]:bg-indigo-600"
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -266,9 +455,133 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                         </TabsContent>
 
                         <TabsContent value="tasks" className="m-0 focus-visible:outline-none h-full">
-                            <div className="bg-white rounded-xl border border-border shadow-sm h-[calc(100%-1rem)] min-h-[500px] overflow-hidden">
-                                <ProjectKanban projectId={project.id} />
+                            <div className="bg-white rounded-xl border border-border shadow-sm min-h-[500px] overflow-hidden">
+                                <ProjectTaskList projectId={project.id} />
                             </div>
+                        </TabsContent>
+
+                        <TabsContent value="quotes" className="m-0 focus-visible:outline-none">
+                            <div className="bg-white rounded-xl border border-border shadow-sm p-6">
+                                <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
+                                    <div>
+                                        <h3 className="font-bold text-lg text-text-primary">Devis du projet</h3>
+                                        <p className="text-sm text-text-muted">Gérez le devis et son envoi pour signature.</p>
+                                    </div>
+                                    <Button variant="outline" size="sm" onClick={() => navigate(`/projets/${project.id}/devis`)} className="text-brand border-brand/30 hover:bg-brand-light">
+                                        <Plus className="h-4 w-4 mr-1" /> {quote ? 'Modifier' : 'Créer un devis'}
+                                    </Button>
+                                </div>
+
+                                {quoteLoading ? (
+                                    <div className="py-12 flex flex-col items-center justify-center text-text-muted">
+                                        <Clock className="h-6 w-6 animate-spin opacity-50 mb-3" />
+                                        <p>Chargement...</p>
+                                    </div>
+                                ) : !quote ? (
+                                    <div className="py-12 text-center border-2 border-dashed border-border rounded-xl bg-surface/50">
+                                        <FileText className="h-10 w-10 text-text-muted opacity-30 mx-auto mb-3" />
+                                        <p className="font-semibold text-text-primary mb-1">Aucun devis pour ce projet</p>
+                                        <p className="text-sm text-text-muted">Créez un devis pour structurer la mission.</p>
+                                    </div>
+                                ) : (() => {
+                                    const quoteLines: QuoteLine[] = Array.isArray(quote.lines) ? (quote.lines as QuoteLine[]) : [];
+                                    const totals = calcQuoteTotals(quoteLines);
+                                    const quoteData: QuoteData = {
+                                        id: quote.id,
+                                        title: quote.title,
+                                        projectId: quote.project_id,
+                                        lines: quoteLines,
+                                        notes: quote.notes ?? '',
+                                        version: quote.version ?? 1,
+                                        created_at: quote.created_at,
+                                    };
+                                    return (
+                                        <div className="border border-border rounded-xl p-4 bg-white shadow-sm">
+                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                <div className="flex-1 space-y-1">
+                                                    <div className="flex items-center gap-3">
+                                                        <h4 className="font-bold text-text-primary">{quote.title}</h4>
+                                                        <DocumentStatusBadge status={quote.status || 'draft'} />
+                                                    </div>
+                                                    <div className="flex items-center gap-4 text-xs text-text-muted">
+                                                        <span className="font-semibold text-text-primary">{totals.subtotalHT.toFixed(2)} € HT</span>
+                                                        <span className="flex items-center gap-1">
+                                                            <Calendar className="h-3 w-3" />
+                                                            {quote.created_at ? format(new Date(quote.created_at), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                    <PDFDownloadLink
+                                                        document={<QuotePDFDocument data={quoteData} totals={totals} profile={profile ?? null} />}
+                                                        fileName={generateDocumentName(
+                                                            'Devis',
+                                                            project.clients?.name || 'CLIENT',
+                                                            quote.created_at || new Date().toISOString(),
+                                                            quote.version ?? 1,
+                                                        )}
+                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary"
+                                                    >
+                                                        {({ loading }) => (
+                                                            <>
+                                                                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                                                                PDF
+                                                            </>
+                                                        )}
+                                                    </PDFDownloadLink>
+
+                                                    {(!quote.status || quote.status === 'draft' || quote.status === 'sent') && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            disabled={quoteSending}
+                                                            onClick={handleRequestQuoteSend}
+                                                            className="h-8 text-xs font-semibold text-brand border-brand/30 hover:bg-brand-light"
+                                                        >
+                                                            {quoteSending ? (
+                                                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                                            ) : (
+                                                                <Send className="h-3.5 w-3.5 mr-1.5" />
+                                                            )}
+                                                            Signer
+                                                        </Button>
+                                                    )}
+
+                                                    {quote.status !== 'archived' && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => updateQuoteStatus.mutate({ id: quote.id, status: 'archived' })}
+                                                            className="h-8 text-xs font-semibold text-text-muted hover:text-danger hover:border-danger/30 hover:bg-danger-light"
+                                                        >
+                                                            <Archive className="h-3.5 w-3.5 mr-1.5" />
+                                                            Archiver
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {quoteSignerError && (
+                                                <div className="mt-3 flex items-center gap-2 text-xs text-danger bg-danger-light/40 border border-danger/20 rounded-lg px-3 py-2">
+                                                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                                                    Ajoutez le nom du signataire dans la fiche client avant d'envoyer.
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
+                            </div>
+
+                            <SendForSignatureModal
+                                open={quoteSendModalOpen}
+                                onOpenChange={setQuoteSendModalOpen}
+                                signerName={project?.clients?.contact_name ?? ''}
+                                signerEmail={project?.clients?.email ?? ''}
+                                documentTitle={quote?.title ?? ''}
+                                documentType="Devis"
+                                onConfirm={handleSendQuoteToFirma}
+                            />
                         </TabsContent>
 
                         <TabsContent value="documents" className="m-0 focus-visible:outline-none">
@@ -320,7 +633,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                                 <h4 className="font-bold text-text-primary text-base">
                                                                     {doc.title}
                                                                 </h4>
-                                                                {translateDocStatus(doc.type, doc.status)}
+                                                                {translateDocStatus(doc.status)}
                                                             </div>
                                                             <div className="flex items-center gap-3 text-xs text-text-muted mt-2">
                                                                 <span className="font-mono bg-surface px-2 py-0.5 rounded border border-border/50 font-bold">{doc.reference}</span>

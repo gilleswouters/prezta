@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProjects, useDeleteProject } from '@/hooks/useProjects';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useProjectAlerts } from '@/hooks/useProjectAlerts';
 import type { ProjectWithClient } from '@/types/project';
 import { ProjectStatus } from '@/types/project';
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal';
@@ -23,6 +24,8 @@ export default function ProjectsPage() {
     const { data: projects, isLoading } = useProjects();
     const deleteProject = useDeleteProject();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const { data: projectAlerts } = useProjectAlerts();
 
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [editingProject, setEditingProject] = useState<ProjectWithClient | null>(null);
@@ -39,6 +42,17 @@ export default function ProjectsPage() {
         setDashboardDefaultTab(tab);
         setDashboardModalOpen(true);
     };
+
+    // Deep link: /projets?open=[project_id] → auto-open modal
+    const openProjectId = searchParams.get('open');
+    useEffect(() => {
+        if (!openProjectId || !projects) return;
+        const found = projects.find(p => p.id === openProjectId);
+        if (found) openDashboard(found);
+        // Clean URL param whether or not the project was found
+        setSearchParams({}, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [openProjectId, projects]);
 
     const handleDeleteClick = (id: string, name: string) => {
         setProjectToDelete({ id, name });
@@ -128,6 +142,7 @@ export default function ProjectsPage() {
                             {projects?.map((project) => {
                                 const docsCount = project.expected_documents?.length || 0;
                                 const docsCompleted = project.expected_documents?.filter(d => d.is_completed).length || 0;
+                                const alert = projectAlerts?.get(project.id);
 
                                 return (
                                     <TableRow key={project.id} className="border-border hover:bg-surface2/50 transition-colors">
@@ -135,13 +150,27 @@ export default function ProjectsPage() {
                                             <StatusIcon status={project.status} />
                                         </TableCell>
                                         <TableCell>
-                                            <button
-                                                onClick={() => openDashboard(project)}
-                                                className="font-medium text-text hover:text-[var(--brand)] hover:underline truncate max-w-[200px] sm:max-w-[300px] text-left appearance-none bg-transparent border-none p-0 cursor-pointer"
-                                                title={`Ouvrir ${project.name}`}
-                                            >
-                                                {project.name}
-                                            </button>
+                                            <div className="flex items-center gap-2">
+                                                {alert && (
+                                                    <span
+                                                        title={`${alert.count} action${alert.count > 1 ? 's' : ''} requise${alert.count > 1 ? 's' : ''}`}
+                                                        className={`h-2.5 w-2.5 rounded-full shrink-0 ${
+                                                            alert.severity === 'danger'
+                                                                ? 'bg-red-500'
+                                                                : alert.severity === 'warning'
+                                                                ? 'bg-amber-400'
+                                                                : 'bg-blue-400'
+                                                        }`}
+                                                    />
+                                                )}
+                                                <button
+                                                    onClick={() => openDashboard(project)}
+                                                    className="font-medium text-text hover:text-[var(--brand)] hover:underline truncate max-w-[180px] sm:max-w-[280px] text-left appearance-none bg-transparent border-none p-0 cursor-pointer"
+                                                    title={`Ouvrir ${project.name}`}
+                                                >
+                                                    {project.name}
+                                                </button>
+                                            </div>
                                         </TableCell>
                                         <TableCell className="hidden md:table-cell text-text-muted">
                                             {project.clients?.name || <span className="italic opacity-50">Inconnu</span>}

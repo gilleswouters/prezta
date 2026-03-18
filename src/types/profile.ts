@@ -11,6 +11,8 @@ export const LegalStatus = {
     AUTO_ENTREPRENEUR_FR: 'auto_entrepreneur_fr',
     EURL: 'eurl',
     SASU: 'sasu',
+    SAS: 'sas',
+    SARL: 'sarl',
     SRL_BE: 'srl_be',
     SA_BE: 'sa_be',
     AUTRE: 'autre'
@@ -38,6 +40,9 @@ export interface Profile {
     legal_representative_role: string | null;
     created_at: string;
     updated_at: string;
+    // Seasonality alerts (migration 00028)
+    seasonality_enabled: boolean;
+    last_seasonality_alert_sent_at: string | null;
 }
 
 // Omit database generated fields for the form mapping

@@ -1,0 +1,2 @@
+[functions.firma-signature]
+verify_jwt = false

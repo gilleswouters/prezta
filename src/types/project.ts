@@ -22,14 +22,19 @@ export interface Project {
     status: ProjectStatus;
     expected_documents: ProjectDocument[];
     portal_link: string;
+    portal_enabled: boolean;
+    portal_expires_at: string | null;
     created_at: string;
     updated_at: string;
 }
 
-export type ProjectFormData = Omit<Project, 'id' | 'user_id' | 'portal_link' | 'created_at' | 'updated_at'>;
+export type ProjectFormData = Omit<
+    Project,
+    'id' | 'user_id' | 'portal_link' | 'portal_enabled' | 'portal_expires_at' | 'created_at' | 'updated_at'
+>;
+
+import type { Client } from './client';
 
 export interface ProjectWithClient extends Project {
-    clients: {
-        name: string;
-    };
+    clients: Client | null;
 }

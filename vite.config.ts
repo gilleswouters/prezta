@@ -11,4 +11,15 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'vendor-pdf': ['@react-pdf/renderer', 'pdf-lib'],
+          'vendor-charts': ['recharts'],
+          'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-select'],
+        },
+      },
+    },
+  },
 })

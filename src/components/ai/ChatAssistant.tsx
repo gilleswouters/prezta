@@ -9,9 +9,10 @@ import {
     Bot,
     Loader2
 } from 'lucide-react';
-import { askGemini } from '@/lib/gemini';
 import { useProfile } from '@/hooks/useProfile';
 import { useProjects } from '@/hooks/useProjects';
+import { useClients } from '@/hooks/useClients';
+import { supabase } from '@/lib/supabase';
 import { useProducts } from '@/hooks/useProducts';
 
 interface Message {
@@ -29,6 +30,7 @@ export function ChatAssistant({ isOpen, onClose }: { isOpen: boolean, onClose: (
     const { data: profile } = useProfile();
     const { data: projects } = useProjects();
     const { data: products } = useProducts();
+    const { data: clients } = useClients();
 
     const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -47,26 +49,67 @@ export function ChatAssistant({ isOpen, onClose }: { isOpen: boolean, onClose: (
         setIsLoading(true);
 
         try {
-            // Build Context
-            const context = `
-CONTEXTE UTILISATEUR PREZTA:
-- Profil: ${profile?.full_name || 'Inconnu'}, ${profile?.legal_status || 'Freelance'} en ${profile?.country || 'FR'}.
-- Catalogue: ${products?.length || 0} prestations enregistrées.
-- Projets actifs: ${projects?.filter(p => p.status === 'in_progress').map(p => p.name).join(', ') || 'Aucun'}.
+            // Build contextual data string hidden from UI
+            let contextData = "=== CONTEXTE DONNÉES UTILISATEUR ===\n";
+            if (profile) contextData += `- Profil: ${profile.full_name}, Entreprise: ${profile.company_name}\n`;
+            if (clients) {
+                contextData += `- Clients: Tu as ${clients.length} clients enregistrés.\n`;
+                const clientNames = clients.map(c => c.name).join(', ');
+                contextData += `  Noms des clients: ${clientNames}\n`;
+            }
+            if (projects) contextData += `- Projets: Tu as ${projects.length} projets en cours ou passés.\n`;
+            if (products) contextData += `- Catalogue Prestations: Tu as ${products.length} prestations enregistrées.\n`;
+            contextData += "====================================\n\n";
 
-CONSIGNE:
-Tu es l'assistant de l'application Prezta. Tu aides les freelances à gérer leur business. 
-Sois concis, professionnel et utile. Réponds en Français.
-Utilise les informations du contexte ci-dessus si pertinent pour répondre.
-`;
+            const payloadMessage = `${contextData}Voici ma question: ${userMsg}`;
 
-            const fullPrompt = `${context}\n\nHistorique:\n${messages.map(m => `${m.role}: ${m.content}`).join('\n')}\nuser: ${userMsg}`;
+            const messagePayload = [...messages, { role: 'user', content: payloadMessage }];
 
-            const response = await askGemini(fullPrompt);
-            setMessages(prev => [...prev, { role: 'assistant', content: response }]);
-        } catch (error) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (!session?.access_token) throw new Error("Not authenticated");
+
+            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-assistant`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                },
+                body: JSON.stringify({ messages: messagePayload })
+            });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.error || "API Error");
+            }
+
+            const reader = res.body?.getReader();
+            if (!reader) throw new Error("No stream available");
+
+            const decoder = new TextDecoder();
+            let assistantResponse = "";
+
+            // Add empty assistant message to initialize the streaming container
+            setMessages(prev => [...prev, { role: 'assistant', content: "" }]);
+            setIsLoading(false); // Enable typing effect UI
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                const chunkText = decoder.decode(value, { stream: true });
+                assistantResponse += chunkText;
+
+                setMessages(prev => {
+                    const next = [...prev];
+                    next[next.length - 1].content = assistantResponse;
+                    return next;
+                });
+            }
+
+        } catch (error: any) {
+            console.error("Chat error:", error);
             setMessages(prev => [...prev, { role: 'assistant', content: "Désolé, j'ai rencontré une erreur technique. Veuillez réessayer." }]);
-        } finally {
             setIsLoading(false);
         }
     };
@@ -116,6 +159,25 @@ Utilise les informations du contexte ci-dessus si pertinent pour répondre.
                         </div>
                     )}
                 </div>
+            </div>
+
+            {/* Quick prompt chips */}
+            <div className="flex flex-wrap gap-2 px-4 pb-2 pt-1 border-t border-[var(--border)]">
+                {[
+                    { label: '📊 Projet le plus rentable ?', prompt: 'Quel est mon projet le plus rentable ce mois ?' },
+                    { label: '⏱ Heures ce mois ?', prompt: 'Combien d\'heures ai-je travaillé ce mois ?' },
+                    { label: '💶 Taux horaire effectif ?', prompt: 'Quel est mon taux horaire effectif ce mois ?' },
+                ].map(({ label, prompt }) => (
+                    <button
+                        key={label}
+                        type="button"
+                        disabled={isLoading}
+                        onClick={() => { setInput(prompt); }}
+                        className="text-[11px] px-2.5 py-1 rounded-full border border-[var(--border)] bg-white text-[var(--text-secondary)] hover:bg-[var(--surface)] hover:text-[var(--brand)] transition-colors disabled:opacity-50 whitespace-nowrap"
+                    >
+                        {label}
+                    </button>
+                ))}
             </div>
 
             {/* Input Area */}

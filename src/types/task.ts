@@ -10,12 +10,13 @@ export interface Task {
     status: TaskStatus;
     priority: TaskPriority;
     due_date: string | null; // ISO Date String
+    linked_document_id: string | null;
     created_at: string;
     updated_at: string;
     // Joined relations automatically populated by Supabase SELECT
     projects?: {
         name: string;
-        clients?: { name: string };
+        clients?: { name: string; address: string | null };
     } | null;
 }
 
@@ -26,4 +27,5 @@ export interface TaskFormData {
     status: TaskStatus;
     priority: TaskPriority;
     due_date?: string | null;
+    linked_document_id?: string | null;
 }

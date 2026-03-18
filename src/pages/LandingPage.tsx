@@ -1,11 +1,13 @@
+import { useState } from 'react';
 import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
-import { CheckCircle2, ChevronRight, FileText, FolderKanban, PenTool, Euro, Sparkles, Globe } from 'lucide-react';
+import { CheckCircle2, ChevronRight, FileText, FolderKanban, PenTool, Euro, Sparkles, Globe, Check, X } from 'lucide-react';
 
 export default function LandingPage() {
     const { session, loading } = useAuth();
     const navigate = useNavigate();
+    const [annual, setAnnual] = useState(false);
 
     if (loading) return null;
 
@@ -154,32 +156,109 @@ export default function LandingPage() {
 
             {/* Pricing */}
             <section id="pricing" className="py-24 bg-surface px-6">
-                <div className="max-w-7xl mx-auto">
-                    <div className="text-center mb-16">
-                        <h2 className="text-3xl md:text-4xl font-extrabold text-text-primary mb-4 tracking-tight">L'unique abonnement</h2>
-                        <p className="text-lg text-text-secondary max-w-2xl mx-auto">La solution complète pour les freelances qui veulent scaler, sans prise de tête.</p>
+                <div className="max-w-5xl mx-auto">
+                    <div className="text-center mb-10">
+                        <h2 className="text-3xl md:text-4xl font-extrabold text-text-primary mb-4 tracking-tight">Tarifs transparents</h2>
+                        <p className="text-lg text-text-secondary max-w-2xl mx-auto">Commencez gratuitement, évoluez quand vous êtes prêt.</p>
                     </div>
 
-                    <div className="flex justify-center items-start">
-                        {/* Pro */}
-                        <div className="w-full max-w-md bg-white border-2 border-brand rounded-3xl p-8 shadow-xl relative overflow-hidden group">
-                            <div className="absolute top-0 right-0 bg-brand text-white text-[10px] font-bold px-4 py-1 rounded-bl-xl uppercase tracking-widest">
-                                Membre Prezta
+                    {/* Annual toggle */}
+                    <div className="flex items-center justify-center gap-3 mb-10">
+                        <span className={`text-sm font-semibold ${!annual ? 'text-text-primary' : 'text-text-muted'}`}>Mensuel</span>
+                        <button
+                            onClick={() => setAnnual(v => !v)}
+                            className={`relative w-11 h-6 rounded-full transition-colors focus:outline-none ${annual ? 'bg-brand' : 'bg-border'}`}
+                            aria-label="Basculer annuel / mensuel"
+                        >
+                            <span className={`absolute top-0.5 left-0.5 h-5 w-5 bg-white rounded-full shadow transition-transform ${annual ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                        <span className={`text-sm font-semibold ${annual ? 'text-text-primary' : 'text-text-muted'}`}>
+                            Annuel <span className="text-emerald-600 text-xs font-bold ml-1">−20%</span>
+                        </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                        {/* Gratuit */}
+                        <div className="rounded-2xl border border-border bg-white p-6 flex flex-col">
+                            <p className="text-xs font-bold uppercase tracking-wider text-text-muted mb-1">Gratuit</p>
+                            <div className="flex items-baseline gap-1 mb-1">
+                                <span className="text-3xl font-black text-text-primary">0€</span>
                             </div>
-                            <h3 className="text-3xl font-bold mb-2 tracking-tight">Prezta Pro</h3>
-                            <div className="flex items-baseline gap-1 mb-8">
-                                <span className="text-5xl font-black">14€</span>
-                                <span className="text-text-muted font-medium">/mois</span>
-                            </div>
-                            <ul className="space-y-4 mb-8 text-text-secondary font-medium">
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Projets illimités</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> E-signature Firma.dev incluse</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Assistant IA expert droit FR</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Recherche INSEE (API SIRENE)</li>
-                                <li className="flex items-center gap-3"><CheckCircle2 className="h-5 w-5 text-brand" /> Support prioritaire</li>
+                            <p className="text-xs text-text-muted mb-6">14 jours d&apos;essai · sans carte bancaire</p>
+                            <ul className="space-y-2 flex-1 mb-8 text-sm">
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />3 projets</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />15 documents actifs</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />500 Mo de stockage</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Devis + factures + contrats PDF</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Templates contrats FR</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Gestion clients + SIRENE</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Tâches + planning</li>
+                                <li className="flex items-center gap-2 text-text-muted"><X className="h-4 w-4 shrink-0" />Signatures FIRMA</li>
+                                <li className="flex items-center gap-2 text-text-muted"><X className="h-4 w-4 shrink-0" />Fonctionnalités IA</li>
                             </ul>
-                            <Button className="w-full h-14 font-bold bg-brand text-white hover:bg-brand-hover text-lg shadow-md" onClick={() => navigate('/pricing')}>
-                                Devenir Membre PRO
+                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => navigate('/signup')}>
+                                Commencer gratuitement
+                            </Button>
+                        </div>
+
+                        {/* Starter */}
+                        <div className="rounded-2xl border border-border bg-white p-6 flex flex-col">
+                            <p className="text-xs font-bold uppercase tracking-wider text-brand mb-1">Starter</p>
+                            <div className="flex items-baseline gap-1 mb-1">
+                                <span className="text-3xl font-black text-text-primary">
+                                    {annual ? '7,20€' : '9€'}
+                                </span>
+                                <span className="text-text-muted text-sm">/mois</span>
+                            </div>
+                            <p className="text-xs text-text-muted mb-6">
+                                {annual ? 'Facturé 86,40€/an' : 'Ou 7,20€/mois · facturé 86,40€/an'}
+                            </p>
+                            <ul className="space-y-2 flex-1 mb-8 text-sm">
+                                <li className="flex items-center gap-2 text-text-muted font-medium"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Tout Gratuit, plus :</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />10 projets</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />50 documents actifs</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />2 Go de stockage</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />3 signatures FIRMA/mois</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Signatures supplémentaires 1€/unité</li>
+                                <li className="flex items-center gap-2 text-text-muted"><X className="h-4 w-4 shrink-0" />Fonctionnalités IA</li>
+                            </ul>
+                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => navigate('/pricing')}>
+                                Choisir Starter
+                            </Button>
+                        </div>
+
+                        {/* Pro */}
+                        <div className="rounded-2xl border-2 border-brand bg-white p-6 flex flex-col relative overflow-hidden shadow-lg shadow-blue-100">
+                            <div className="absolute top-0 right-0 bg-brand text-white text-[10px] font-bold px-3 py-1 rounded-bl-xl uppercase tracking-widest">
+                                Recommandé
+                            </div>
+                            <div className="flex items-center gap-1.5 mb-1">
+                                <Sparkles className="h-3.5 w-3.5 text-brand" />
+                                <p className="text-xs font-bold uppercase tracking-wider text-brand">Pro</p>
+                            </div>
+                            <div className="flex items-baseline gap-1 mb-1">
+                                <span className="text-3xl font-black text-text-primary">
+                                    {annual ? '15,20€' : '19€'}
+                                </span>
+                                <span className="text-text-muted text-sm">/mois</span>
+                            </div>
+                            <p className="text-xs text-text-muted mb-6">
+                                {annual ? 'Facturé 182,40€/an' : 'Ou 15,20€/mois · facturé 182,40€/an'}
+                            </p>
+                            <ul className="space-y-2 flex-1 mb-8 text-sm">
+                                <li className="flex items-center gap-2 text-text-muted font-medium"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Tout Starter, plus :</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Projets illimités</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Documents illimités</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />10 Go de stockage</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Signatures FIRMA illimitées</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" /><span className="font-semibold">IA complète</span> — clauses, relances, trajets</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Portail client · Export comptable ZIP</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Alertes expiration · Tracking devis</li>
+                                <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Dashboard revenus · Support prioritaire</li>
+                            </ul>
+                            <Button className="w-full bg-brand text-white hover:bg-brand-hover font-bold shadow-md shadow-blue-200" onClick={() => navigate('/pricing')}>
+                                Choisir Pro
                             </Button>
                         </div>
                     </div>
@@ -193,11 +272,14 @@ export default function LandingPage() {
                         <div className="font-extrabold text-brand text-xl tracking-tight mb-2">Prezta</div>
                         <p className="text-sm text-text-muted font-medium">Le workspace pour freelances francophones</p>
                     </div>
-                    <div className="flex gap-6 text-sm font-semibold text-text-secondary">
+                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-text-secondary">
                         <a href="#features" className="hover:text-brand">Fonctionnalités</a>
                         <a href="#pricing" className="hover:text-brand">Tarifs</a>
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/login')}>Connexion</span>
-                        <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/pricing')}>S'abonner</span>
+                        <a href="mailto:support@prezta.eu" className="hover:text-brand">Support</a>
+                        <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/mentions-legales')}>Mentions légales</span>
+                        <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/confidentialite')}>Confidentialité</span>
+                        <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/cgv')}>CGV</span>
                     </div>
                     <div className="text-xs text-text-muted font-medium text-right">
                         Made in France 🇫🇷 · Données hébergées en Europe<br />

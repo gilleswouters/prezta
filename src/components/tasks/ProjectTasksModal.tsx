@@ -1,6 +1,6 @@
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import type { ProjectWithClient } from '@/types/project';
-import { ProjectKanban } from './ProjectKanban';
+import { ProjectTaskList } from './ProjectTaskList';
 import { FolderKanban } from 'lucide-react';
 
 interface ProjectTasksModalProps {
@@ -27,7 +27,7 @@ export function ProjectTasksModal({ open, onOpenChange, project }: ProjectTasksM
                 </div>
 
                 <div className="p-6 flex-1 overflow-hidden bg-gray-50/30">
-                    <ProjectKanban projectId={project.id} />
+                    <ProjectTaskList projectId={project.id} />
                 </div>
             </DialogContent>
         </Dialog>

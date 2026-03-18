@@ -1,0 +1,12 @@
+﻿nom;description;prix_ht;unite;categorie
+Mise aux normes tableau électrique;Remplacement et mise aux normes tableau électrique;850;forfait;Tableau électrique
+Installation prise électrique;Pose et raccordement prise murale;45;unité;Prises et interrupteurs
+Installation interrupteur;Pose et raccordement interrupteur simple ou double;35;unité;Prises et interrupteurs
+Main d'œuvre électricité;Intervention et travaux électriques;55;heure;Main d'œuvre
+Installation VMC;Pose système ventilation mécanique contrôlée;650;forfait;Ventilation
+Diagnostic électrique;Rapport de diagnostic installation électrique;180;forfait;Diagnostic
+Câblage réseau informatique;Installation réseau RJ45 et prises réseau;60;heure;Réseau
+Installation éclairage LED;Remplacement éclairage traditionnel par LED;85;point lumineux;Éclairage
+Dépannage électrique;Intervention dépannage urgent;90;heure;Dépannage
+Borne recharge véhicule électrique;Installation IRVE wallbox jusqu'à 22kW;1200;forfait;IRVE
+Mise en sécurité installation;Travaux de mise en sécurité urgente;75;heure;Sécurité

@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useProfile } from '@/hooks/useProfile';
 import { useCreateProductBatch } from '@/hooks/useProducts';
-import { askGemini } from '@/lib/gemini';
+import { supabase } from '@/lib/supabase';
 import { Country } from '@/types/profile';
 import { Unit } from '@/types/product';
 import type { ProductFormData } from '@/types/product';
@@ -17,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Sparkles, Loader2, Check } from 'lucide-react';
+import { Sparkles, Loader2, Check, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { Label } from '@/components/ui/label';
 
@@ -34,9 +35,12 @@ const JOB_CATEGORIES = [
 interface AiCatalogGeneratorProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** When false, shows an upgrade prompt instead of the generator */
+    canUseAI?: boolean;
 }
 
-export function AiCatalogGenerator({ open, onOpenChange }: AiCatalogGeneratorProps) {
+export function AiCatalogGenerator({ open, onOpenChange, canUseAI = true }: AiCatalogGeneratorProps) {
+    const navigate = useNavigate();
     const { data: profile } = useProfile();
     const createBatch = useCreateProductBatch();
 
@@ -67,43 +71,28 @@ export function AiCatalogGenerator({ open, onOpenChange }: AiCatalogGeneratorPro
             : profile?.country === Country.CH ? "Suisse"
                 : "Belgique";
 
-        const prompt = `Tu es un assistant pour freelances ${countryStr}. Génère exactement 8 prestations typiques pour un freelance "${jobCategory}" en ${countryStr} en 2026.
-    Réponds UNIQUEMENT avec un tableau JSON valide, sans texte avant ou après, sans markdown, sans backticks.
-    Format exact : 
-    [{ "name": "string", "description": "string (max 80 chars)", "unit_price": number, "tva_rate": number, "unit": "heure" | "forfait" | "pièce" | "jour" }]
-    Les prix doivent être réalistes pour le marché ${countryStr}.
-    L'unité doit être exactement l'une de ces 4 chaînes : "heure" | "forfait" | "pièce" | "jour".`;
-
         try {
-            const responseText = await askGemini(prompt);
+            const { data, error } = await supabase.functions.invoke<{ prestations: Array<{ name: string; description: string | null; unit_price: number; tva_rate: number; unit: string }> }>(
+                'generate-catalogue',
+                { body: { metier: jobCategory, pays: countryStr } }
+            );
 
-            // Clean up markdown block if the model ignores the instruction
-            let cleanedJson = responseText.trim();
-            if (cleanedJson.startsWith('```json')) {
-                cleanedJson = cleanedJson.replace(/^```json/, '').replace(/```$/, '').trim();
-            } else if (cleanedJson.startsWith('```')) {
-                cleanedJson = cleanedJson.replace(/^```/, '').replace(/```$/, '').trim();
-            }
+            if (error || !data?.prestations) throw error ?? new Error('Invalid response');
 
-            const parsedData = JSON.parse(cleanedJson);
-
-            if (!Array.isArray(parsedData) || parsedData.length === 0) {
-                throw new Error("Invalid format");
-            }
-
-            const validatedProducts: ProductFormData[] = parsedData.map(item => ({
-                name: String(item.name || 'Prestation'),
-                description: item.description ? String(item.description).substring(0, 100) : null,
-                unit_price: Number(item.unit_price) || 0,
-                tva_rate: Number(item.tva_rate) || 0,
+            const validatedProducts: ProductFormData[] = data.prestations.map(item => ({
+                name: item.name,
+                description: item.description,
+                unit_price: item.unit_price,
+                tva_rate: item.tva_rate,
                 unit: (Object.values(Unit).includes(item.unit as Unit) ? item.unit : Unit.FORFAIT) as Unit,
+                category: null,
             }));
 
             setGeneratedProducts(validatedProducts);
             setSelectedIndexes(new Set(validatedProducts.map((_, i) => i)));
 
         } catch (error) {
-            console.error("Gemini Parsing Error", error);
+            console.error("generate-catalogue error", error);
             toast.error("Génération échouée, veuillez réessayer.");
         } finally {
             setIsGenerating(false);
@@ -136,15 +125,36 @@ export function AiCatalogGenerator({ open, onOpenChange }: AiCatalogGeneratorPro
             <DialogContent className="sm:max-w-[700px] bg-surface text-text border-border max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="font-serif text-xl flex items-center gap-2">
-                        <Sparkles className="h-5 w-5 text-ai" />
+                        {canUseAI ? (
+                            <Sparkles className="h-5 w-5 text-ai" />
+                        ) : (
+                            <Lock className="h-5 w-5 text-amber-500" />
+                        )}
                         Générer avec l'IA
                     </DialogTitle>
                     <DialogDescription className="text-text-muted">
-                        Créez instantanément un catalogue sur-mesure pour votre spécialité.
+                        {canUseAI
+                            ? "Créez instantanément un catalogue sur-mesure pour votre spécialité."
+                            : "Disponible avec le plan Pro."}
                     </DialogDescription>
                 </DialogHeader>
 
-                {generatedProducts.length === 0 ? (
+                {!canUseAI ? (
+                    <div className="py-8 flex flex-col items-center gap-4 text-center">
+                        <div className="h-16 w-16 bg-amber-50 rounded-full flex items-center justify-center">
+                            <Lock className="h-8 w-8 text-amber-400" />
+                        </div>
+                        <p className="text-text-secondary max-w-sm">
+                            La génération de catalogue par IA est réservée aux abonnés Pro. Passez au Pro pour créer votre catalogue en quelques secondes.
+                        </p>
+                        <Button
+                            onClick={() => { handleOpenChange(false); navigate('/pricing'); }}
+                            className="bg-brand text-white hover:bg-brand-hover mt-2"
+                        >
+                            Voir les offres →
+                        </Button>
+                    </div>
+                ) : generatedProducts.length === 0 ? (
                     <div className="py-6 space-y-6">
                         <div className="flex flex-col space-y-2">
                             <Label htmlFor="category">Quel est votre domaine d'activité ?</Label>
@@ -216,7 +226,7 @@ export function AiCatalogGenerator({ open, onOpenChange }: AiCatalogGeneratorPro
                             </Button>
                             <Button
                                 onClick={handleImport}
-                                className="bg-accent text-bg hover:opacity-90 h-11"
+                                className="bg-brand text-white hover:bg-brand-hover h-11"
                                 disabled={selectedIndexes.size === 0 || createBatch.isPending}
                             >
                                 {createBatch.isPending ? (
@@ -233,3 +243,4 @@ export function AiCatalogGenerator({ open, onOpenChange }: AiCatalogGeneratorPro
         </Dialog>
     );
 }
+

@@ -83,8 +83,8 @@ export function TaskModal({ open, onOpenChange, task, defaultProjectId }: TaskMo
                 toast.success('Tâche créée');
             }
             onOpenChange(false);
-        } catch (error: any) {
-            toast.error('Erreur', { description: error.message });
+        } catch (error) {
+            toast.error('Erreur', { description: error instanceof Error ? error.message : 'Erreur inconnue' });
         }
     };
 
@@ -95,8 +95,8 @@ export function TaskModal({ open, onOpenChange, task, defaultProjectId }: TaskMo
                 await deleteTask(task.id);
                 toast.success('Tâche supprimée');
                 onOpenChange(false);
-            } catch (error: any) {
-                toast.error('Erreur', { description: error.message });
+            } catch (error) {
+                toast.error('Erreur', { description: error instanceof Error ? error.message : 'Erreur inconnue' });
             }
         }
     };

@@ -9,6 +9,8 @@ export interface SireneResult {
     code_postal: string;
     ville: string;
     nature_juridique: string;
+    email?: string;
+    phone?: string;
 }
 
 export function useSireneSearch() {
@@ -55,7 +57,9 @@ export function useSireneSearch() {
                         etat_administratif: r.etat_administratif || '',
                         code_postal: siege.code_postal || '',
                         ville: siege.libelle_commune || '',
-                        nature_juridique: r.libelle_nature_juridique_entreprise || r.nature_juridique_entreprise || ''
+                        nature_juridique: r.libelle_nature_juridique_entreprise || r.nature_juridique_entreprise || '',
+                        email: r.dirigeants?.[0]?.courriels?.[0]?.courriel || undefined, // Approximation, SIRENE has limited contact data
+                        phone: undefined // Note: SIRENE Open Data rarely provides direct phone numbers
                     };
                 });
 

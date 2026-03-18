@@ -1,0 +1,11 @@
+﻿nom;description;prix_ht;unite;categorie
+Développement site vitrine;Création d'un site web vitrine responsive 5 pages;2500;forfait;Développement web
+Développement e-commerce;Boutique en ligne complète avec paiement;4800;forfait;Développement web
+Intégration HTML/CSS;Intégration de maquettes en HTML/CSS pixel perfect;75;heure;Développement web
+Développement React;Développement composants et pages React/TypeScript;90;heure;Développement web
+Audit performance web;Audit complet des performances et SEO technique;800;forfait;Conseil
+Formation développement web;Formation personnalisée sur mesure;120;heure;Formation
+Maintenance mensuelle;Maintenance et mises à jour mensuelles;350;mois;Maintenance
+API REST développement;Conception et développement d'une API REST;85;heure;Backend
+Migration base de données;Migration et optimisation de base de données;1200;forfait;Backend
+Consulting technique;Conseil et architecture technique;110;heure;Conseil

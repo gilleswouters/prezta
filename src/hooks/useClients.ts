@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
-import type { Client, ClientFormData } from '@/types/client';
+import type { Client, ClientFormData, ClientEvent, ClientEventFormData } from '@/types/client';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 
@@ -105,6 +105,60 @@ export const useDeleteClient = () => {
         onError: (error) => {
             console.error("Erreur suppression client:", error);
             toast.error("Impossible de supprimer le client.");
+        }
+    });
+};
+
+// ==========================================
+// CLIENT EVENTS (Timeline)
+// ==========================================
+
+export const useClientEvents = (clientId: string) => {
+    const { user } = useAuth();
+
+    return useQuery({
+        queryKey: ['client_events', clientId],
+        queryFn: async () => {
+            if (!user?.id) throw new Error("Non authentifié");
+            const { data, error } = await supabase
+                .from('client_events')
+                .select('*')
+                .eq('client_id', clientId)
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error("Erreur chargement événements client:", error);
+                throw error;
+            }
+            return data as ClientEvent[];
+        },
+        enabled: !!user?.id && !!clientId,
+    });
+};
+
+export const useCreateClientEvent = () => {
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (newEvent: ClientEventFormData) => {
+            if (!user?.id) throw new Error("Non authentifié");
+            const { data, error } = await supabase
+                .from('client_events')
+                .insert([{ ...newEvent, user_id: user.id }])
+                .select()
+                .single();
+
+            if (error) throw error;
+            return data as ClientEvent;
+        },
+        onSuccess: (data) => {
+            queryClient.invalidateQueries({ queryKey: ['client_events', data.client_id] });
+            toast.success("Note ajoutée à l'historique.");
+        },
+        onError: (error) => {
+            console.error("Erreur création événement:", error);
+            toast.error("Impossible d'ajouter la note.");
         }
     });
 };

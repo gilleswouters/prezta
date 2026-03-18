@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { clientSchema } from '@/lib/validations/client';
@@ -11,6 +11,8 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Form, FormControl, FormField, FormLabel, FormMessage } from '@/components/ui/form';
 import { Loader2, Search, Building2, MapPin } from 'lucide-react';
+
+const CLIENT_CATEGORIES = ['Entreprise', 'Particulier', 'Association', 'Collectivité', 'Startup', 'Agence'] as const;
 import { useSireneSearch } from '@/hooks/useSireneSearch';
 import type { SireneResult } from '@/hooks/useSireneSearch';
 import { calculateFrenchVAT } from '@/hooks/useSireneSearch';
@@ -30,13 +32,15 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
         resolver: zodResolver(clientSchema),
         defaultValues: {
             name: '',
+            contact_name: '',
             email: '',
             phone: '',
             address: '',
             vat_number: '',
             notes: '',
             siret: '',
-            legal_status: ''
+            legal_status: '',
+            category: '',
         }
     });
 
@@ -44,13 +48,15 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
         if (client && open) {
             form.reset({
                 name: client.name,
+                contact_name: client.contact_name || '',
                 email: client.email || '',
                 phone: client.phone || '',
                 address: client.address || '',
                 vat_number: client.vat_number || '',
                 notes: client.notes || '',
                 siret: client.siret || '',
-                legal_status: client.legal_status || ''
+                legal_status: client.legal_status || '',
+                category: client.category || '',
             });
         } else if (!open) {
             form.reset();
@@ -61,6 +67,7 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
         try {
             const payload = {
                 name: data.name,
+                contact_name: data.contact_name || null,
                 email: data.email || null,
                 phone: data.phone || null,
                 address: data.address || null,
@@ -68,6 +75,7 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
                 notes: data.notes || null,
                 siret: data.siret || null,
                 legal_status: data.legal_status || null,
+                category: data.category || null,
             };
 
             if (isEditing && client) {
@@ -85,6 +93,18 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
     const { results, search, isLoading: isSearchLoading, clearResults } = useSireneSearch();
     const [searchQuery, setSearchQuery] = useState('');
     const [showResults, setShowResults] = useState(false);
+    const searchRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+                setShowResults(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
 
     // Debounce the search
     useEffect(() => {
@@ -111,6 +131,12 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
         if (calculatedVat) {
             form.setValue('vat_number', calculatedVat, { shouldValidate: true });
         }
+        if (company.email) {
+            form.setValue('email', company.email, { shouldValidate: true });
+        }
+        if (company.phone) {
+            form.setValue('phone', company.phone, { shouldValidate: true });
+        }
 
         setShowResults(false);
         setSearchQuery('');
@@ -130,13 +156,13 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
 
                         <FormField control={form.control} name="name" render={({ field }) => (
-                            <div className="space-y-2 relative">
+                            <div className="space-y-2 relative" ref={searchRef}>
                                 <FormLabel className="flex justify-between items-center">
                                     <span>Nom / Entreprise *</span>
                                     {!isEditing && (
                                         <span className="text-[10px] text-brand bg-brand-light px-2 py-0.5 rounded font-bold uppercase flex items-center gap-1">
                                             <Search className="w-3 h-3" />
-                                            Recherche API SIRENE
+                                            Recherche SIRENE
                                         </span>
                                     )}
                                 </FormLabel>
@@ -188,6 +214,22 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
                                     </div>
                                 )}
 
+                                <FormMessage />
+                            </div>
+                        )} />
+
+                        <FormField control={form.control} name="contact_name" render={({ field }) => (
+                            <div className="space-y-2">
+                                <FormLabel>Nom du signataire</FormLabel>
+                                <FormControl>
+                                    <Input
+                                        placeholder="Ex: Marie Dupont"
+                                        className="bg-surface2 border-border"
+                                        {...field}
+                                        value={field.value || ''}
+                                    />
+                                </FormControl>
+                                <p className="text-[11px] text-text-muted">Personne physique qui signera les contrats</p>
                                 <FormMessage />
                             </div>
                         )} />
@@ -252,6 +294,25 @@ export function ClientModal({ open, onOpenChange, client }: ClientModalProps) {
                                 <FormControl>
                                     <Input placeholder="Ex: SASU, EURL, Auto-entrepreneur..." className="bg-surface2 border-border" {...field} value={field.value || ''} />
                                 </FormControl>
+                                <FormMessage />
+                            </div>
+                        )} />
+
+                        <FormField control={form.control} name="category" render={({ field }) => (
+                            <div className="space-y-2">
+                                <FormLabel>Catégorie <span className="text-text-muted font-normal">(Optionnel)</span></FormLabel>
+                                <FormControl>
+                                    <Input
+                                        list="client-categories"
+                                        placeholder="Ex: Startup, Agence..."
+                                        className="bg-surface2 border-border"
+                                        {...field}
+                                        value={field.value || ''}
+                                    />
+                                </FormControl>
+                                <datalist id="client-categories">
+                                    {CLIENT_CATEGORIES.map(c => <option key={c} value={c} />)}
+                                </datalist>
                                 <FormMessage />
                             </div>
                         )} />

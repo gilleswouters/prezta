@@ -22,10 +22,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const [loading, setLoading] = useState(true)
 
     useEffect(() => {
+        // Safety timeout — loading must resolve within 3 s regardless of Supabase state
+        const timeout = setTimeout(() => setLoading(false), 3000)
+
         supabase.auth.getSession().then(({ data: { session } }) => {
             setSession(session)
             setUser(session?.user ?? null)
             setLoading(false)
+            clearTimeout(timeout)
+        }).catch(() => {
+            setLoading(false)
+            clearTimeout(timeout)
         })
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -34,11 +41,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setLoading(false)
         })
 
-        return () => subscription.unsubscribe()
+        return () => {
+            clearTimeout(timeout)
+            subscription.unsubscribe()
+        }
     }, [])
 
     const signOut = async () => {
         await supabase.auth.signOut()
+        if (import.meta.env.DEV) {
+            window.location.href = '/'
+        } else {
+            window.location.href = 'https://www.prezta.eu'
+        }
     }
 
     return (

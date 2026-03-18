@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase';
 import type { Invoice, InvoiceWithProject, InvoiceFormData } from '@/types/invoice';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+import { trackEvent } from '@/lib/plausible';
 
 export const useInvoices = (projectId?: string) => {
     const { user } = useAuth();
@@ -14,18 +15,25 @@ export const useInvoices = (projectId?: string) => {
             let query = supabase
                 .from('invoices')
                 .select(`
-                    id, 
+                    id,
                     reference,
-                    user_id, 
-                    project_id, 
-                    amount, 
-                    status, 
-                    due_date, 
-                    paid_date, 
-                    notes, 
+                    user_id,
+                    project_id,
+                    amount,
+                    status,
+                    due_date,
+                    paid_date,
+                    notes,
                     created_at,
+                    last_reminder_sent_at,
+                    reminder_count,
                     projects (
-                        name
+                        name,
+                        clients (
+                            name,
+                            email,
+                            contact_name
+                        )
                     )
                 `)
                 .eq('user_id', user.id);
@@ -66,7 +74,7 @@ export const useCreateInvoice = () => {
             queryClient.invalidateQueries({ queryKey: ['invoices', user?.id] });
             toast.success("Facture enregistrée.");
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
             console.error("Erreur création facture:", error);
             toast.error(`Impossible d'enregistrer la facture: ${error.message || 'Erreur inconnue'}`);
         }
@@ -91,7 +99,8 @@ export const useUpdateInvoice = () => {
             if (error) throw error;
             return data as Invoice;
         },
-        onSuccess: () => {
+        onSuccess: (_data, { updates }) => {
+            if (updates.status === 'payé') trackEvent('invoice_paid');
             queryClient.invalidateQueries({ queryKey: ['invoices', user?.id] });
             toast.success("Facture mise à jour.");
         },
@@ -125,5 +134,75 @@ export const useDeleteInvoice = () => {
             console.error("Erreur suppression facture:", error);
             toast.error("Impossible de supprimer la facture.");
         }
+    });
+};
+
+export const useArchiveInvoice = () => {
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (id: string) => {
+            if (!user?.id) throw new Error("Non authentifié");
+            const { error } = await supabase
+                .from('invoices')
+                .update({ status: 'archivé' })
+                .eq('id', id)
+                .eq('user_id', user.id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['invoices', user?.id] });
+            queryClient.invalidateQueries({ queryKey: ['activeDocCount', user?.id] });
+            toast.info("Facture archivée.");
+        },
+        onError: () => toast.error("Impossible d'archiver la facture."),
+    });
+};
+
+export const useUnarchiveInvoice = () => {
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async (id: string) => {
+            if (!user?.id) throw new Error("Non authentifié");
+            const { error } = await supabase
+                .from('invoices')
+                .update({ status: 'en_attente' })
+                .eq('id', id)
+                .eq('user_id', user.id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['invoices', user?.id] });
+            queryClient.invalidateQueries({ queryKey: ['activeDocCount', user?.id] });
+            toast.success("Facture désarchivée.");
+        },
+        onError: () => toast.error("Impossible de désarchiver la facture."),
+    });
+};
+
+/** Increments reminder_count and updates last_reminder_sent_at after a reminder is sent. */
+export const useUpdateInvoiceReminder = () => {
+    const { user } = useAuth();
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({ id, currentCount }: { id: string; currentCount: number }) => {
+            if (!user?.id) throw new Error('Non authentifié');
+            const { error } = await supabase
+                .from('invoices')
+                .update({
+                    last_reminder_sent_at: new Date().toISOString(),
+                    reminder_count: currentCount + 1,
+                })
+                .eq('id', id)
+                .eq('user_id', user.id);
+            if (error) throw error;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['invoices', user?.id] });
+        },
     });
 };

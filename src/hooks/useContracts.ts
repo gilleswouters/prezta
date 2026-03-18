@@ -2,7 +2,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
+import { addDays } from 'date-fns';
 import type { ContractTemplate, ContractTemplateFormData, ProjectContract, ProjectContractFormData } from '@/types/contract';
+
+export interface ExpiringContractItem {
+    id: string;
+    title: string;
+    expires_at: string;
+    projects: { id: string; name: string } | null;
+}
 
 // --- CONTRACT TEMPLATES ---
 
@@ -198,6 +206,32 @@ export const useUpdateProjectContract = () => {
             console.error(error);
             toast.error("Échec de la mise à jour.");
         }
+    });
+};
+
+export const useExpiringContracts = () => {
+    const { user } = useAuth();
+
+    return useQuery({
+        queryKey: ['expiring-contracts', user?.id],
+        queryFn: async () => {
+            if (!user?.id) throw new Error('Non authentifié');
+            const now = new Date();
+            const in30d = addDays(now, 30);
+            const { data, error } = await supabase
+                .from('project_contracts')
+                .select('id, title, expires_at, projects(id, name)')
+                .eq('user_id', user.id)
+                .not('expires_at', 'is', null)
+                .gt('expires_at', now.toISOString())
+                .lte('expires_at', in30d.toISOString())
+                .order('expires_at', { ascending: true })
+                .limit(10);
+            if (error) throw error;
+            return (data ?? []) as unknown as ExpiringContractItem[];
+        },
+        enabled: !!user?.id,
+        staleTime: 5 * 60 * 1000,
     });
 };
 

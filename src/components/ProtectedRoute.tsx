@@ -1,13 +1,27 @@
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
-import { useSubscription } from '@/hooks/useSubscription'
+import { supabase } from '@/lib/supabase'
 
 export const ProtectedRoute = () => {
-    const { session, loading: authLoading } = useAuth()
-    const { data: subscription, isLoading: subLoading } = useSubscription()
+    const { session, loading } = useAuth()
     const location = useLocation()
 
-    if (authLoading || subLoading) {
+    const { data: profileCheck, isLoading: profileLoading } = useQuery({
+        queryKey: ['profile-onboarding', session?.user.id],
+        queryFn: async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('legal_status')
+                .eq('id', session!.user.id)
+                .maybeSingle()
+            return data
+        },
+        enabled: !!session?.user.id,
+        staleTime: 1000 * 60 * 5,
+    })
+
+    if (loading || (!!session && profileLoading)) {
         return (
             <div className="flex items-center justify-center min-h-screen bg-bg">
                 <div className="text-text-muted text-sm font-mono tracking-widest uppercase animate-pulse">
@@ -21,9 +35,9 @@ export const ProtectedRoute = () => {
         return <Navigate to="/login" replace />
     }
 
-    // Enforce Pro access for all protected routes EXCEPT /pricing
-    if (location.pathname !== '/pricing' && !subscription?.isPro) {
-        return <Navigate to="/pricing" replace />
+    const needsOnboarding = !profileCheck?.legal_status
+    if (needsOnboarding && location.pathname !== '/onboarding') {
+        return <Navigate to="/onboarding" replace />
     }
 
     return <Outlet />

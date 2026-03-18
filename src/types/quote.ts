@@ -1,5 +1,13 @@
 import { Unit } from './product';
 
+/** Full status lifecycle for a quote (devis). */
+export type QuoteStatus = 'draft' | 'sent' | 'lu' | 'accepted' | 'rejected' | 'archived';
+
+export interface StatusHistoryEntry {
+    status: QuoteStatus;
+    at: string; // ISO timestamp
+}
+
 export interface QuoteLine {
     id: string; // Temporaire pendant l'édition
     productId?: string; // Si importé depuis catalogue
@@ -19,7 +27,14 @@ export interface QuoteData {
     clientId?: string;
     lines: QuoteLine[];
     notes?: string;
-    status?: 'draft' | 'sent' | 'accepted' | 'rejected';
+    status?: QuoteStatus;
+    sent_at?: string | null;
+    status_history?: StatusHistoryEntry[];
+    /** Version number within a version chain. Defaults to 1. */
+    version?: number;
+    /** UUID of the quote this was derived from, or null if this is the root. */
+    version_of?: string | null;
+    created_at?: string;
 }
 
 // Calcul Helper Type

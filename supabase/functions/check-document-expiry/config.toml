@@ -1,0 +1,2 @@
+[functions.check-document-expiry]
+verify_jwt = false

@@ -207,7 +207,7 @@ export function QuotePDFDocument({ data, totals, profile, quoteNumber = "Brouill
     const validUntil = new Date(today);
     validUntil.setDate(today.getDate() + 30); // Validité 30 jours (par défaut)
 
-    const legalMentions = getLegalMentions(profile);
+    const legalMentions = getLegalMentions(profile, 'quote');
 
     // Mock client details since it's not fully mapped yet in QuoteData structure but assuming standard flow
     const clientName = "Client Inconnu"; // Should map from client_id ideally

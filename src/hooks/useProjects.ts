@@ -86,6 +86,27 @@ export const useUpdateProject = () => {
     });
 };
 
+export const useProjectById = (projectId: string | undefined) => {
+    const { user } = useAuth();
+
+    return useQuery({
+        queryKey: ['project', projectId, user?.id],
+        queryFn: async () => {
+            if (!user?.id || !projectId) throw new Error("Paramètres manquants");
+            const { data, error } = await supabase
+                .from('projects')
+                .select('*, clients (*)')
+                .eq('id', projectId)
+                .eq('user_id', user.id)
+                .single();
+
+            if (error) throw error;
+            return data as ProjectWithClient;
+        },
+        enabled: !!user?.id && !!projectId,
+    });
+};
+
 export const useDeleteProject = () => {
     const { user } = useAuth();
     const queryClient = useQueryClient();

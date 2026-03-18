@@ -8,9 +8,10 @@ import { useProjectWizardStore } from '@/stores/useProjectWizardStore';
 import { projectStep1Schema, projectStep2Schema } from '@/lib/validations/project';
 import { useClients } from '@/hooks/useClients';
 import { useCreateProject } from '@/hooks/useProjects';
+import { usePlanLimits } from '@/hooks/usePlanLimits';
 import type { ProjectDocument, ProjectFormData } from '@/types/project';
 import { ProjectStatus } from '@/types/project';
-import { askGemini } from '@/lib/gemini';
+import { supabase } from '@/lib/supabase';
 import { ClientModal } from '@/components/ClientModal';
 
 import {
@@ -24,16 +25,23 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Form, FormControl, FormField, FormLabel, FormMessage } from '@/components/ui/form';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Loader2, ArrowRight, ArrowLeft, Check, Sparkles, Plus, Trash2 } from 'lucide-react';
+import { Loader2, ArrowRight, ArrowLeft, Check, Sparkles, Plus, Trash2, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
+
+function extractCity(address: string | null): string | null {
+    if (!address) return null;
+    const parts = address.split(',').map(p => p.trim()).filter(Boolean);
+    return parts.length > 1 ? parts[parts.length - 1] : null;
+}
 
 export default function ProjectWizard() {
     const { currentStep, projectData, setStep, updateData, reset } = useProjectWizardStore();
     const { data: clients, isLoading: clientsLoading } = useClients();
     const createProject = useCreateProject();
+    const { canCreateProject } = usePlanLimits();
     const navigate = useNavigate();
 
     const [isGeneratingAi, setIsGeneratingAi] = useState(false);
@@ -56,6 +64,8 @@ export default function ProjectWizard() {
     });
 
     const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+    const [comboOpen, setComboOpen] = useState(false);
+    const [comboSearch, setComboSearch] = useState('');
 
     // Step 3 Local State (bypassing full react-hook-form for dynamic array simplicity here)
     const [documents, setDocuments] = useState<ProjectDocument[]>(projectData.expected_documents || []);
@@ -89,37 +99,20 @@ export default function ProjectWizard() {
 
         setIsGeneratingAi(true);
 
-        const prompt = `Tu es un chef de projet pour un profil freelance. Génère une checklist de 5 à 8 documents obligatoires, attendus ou livrables pour le projet nommé "${projectData.name}".
-    Description du brief du projet : "${projectData.description}".
-    Réponds UNIQUEMENT avec un tableau JSON valide.
-    Format exact : 
-    [{ "name": "string (max 60 chars)" }]
-    Exemples: "Acompte 30% payé", "Brief créatif validé", "Identifiants FTP reçus", "Maquette V1 validée".
-    Reste concis.`;
-
         try {
-            const responseText = await askGemini(prompt);
+            const { data, error } = await supabase.functions.invoke<{ suggestions: Array<{ name: string }> }>(
+                'suggest-project-documents',
+                { body: { projectName: projectData.name ?? '', description: projectData.description ?? '' } }
+            );
 
-            let cleanedJson = responseText.trim();
-            if (cleanedJson.startsWith('```json')) {
-                cleanedJson = cleanedJson.replace(/^```json/, '').replace(/```$/, '').trim();
-            } else if (cleanedJson.startsWith('```')) {
-                cleanedJson = cleanedJson.replace(/^```/, '').replace(/```$/, '').trim();
-            }
+            if (error || !data?.suggestions) throw error ?? new Error('Invalid response');
 
-            const parsedData = JSON.parse(cleanedJson);
-
-            if (!Array.isArray(parsedData) || parsedData.length === 0) {
-                throw new Error("Invalid format");
-            }
-
-            const aiDocs: ProjectDocument[] = parsedData.map(item => ({
+            const aiDocs: ProjectDocument[] = data.suggestions.map(item => ({
                 id: uuidv4(),
-                name: String(item.name || 'Document'),
-                is_completed: false
+                name: item.name,
+                is_completed: false,
             }));
 
-            // Append strictly non-existing items or replace? Let's append
             setDocuments(prev => [...prev, ...aiDocs]);
             toast.success("Documents suggérés ajoutés !");
         } catch (error) {
@@ -174,39 +167,63 @@ export default function ProjectWizard() {
                                 <FormField control={form1.control} name="client_id" render={({ field }) => (
                                     <div className="space-y-2">
                                         <FormLabel>Client associé *</FormLabel>
-                                        <Select
-                                            onValueChange={(val) => {
-                                                if (val === 'new_client') {
-                                                    setIsClientModalOpen(true);
-                                                } else {
-                                                    field.onChange(val);
-                                                }
-                                            }}
-                                            value={field.value || ''}
-                                            disabled={clientsLoading}
-                                        >
-                                            <FormControl>
-                                                <SelectTrigger className="bg-surface2 border-border">
-                                                    <SelectValue placeholder={clientsLoading ? "Chargement..." : "Sélectionner un client"} />
-                                                </SelectTrigger>
-                                            </FormControl>
-                                            <SelectContent className="bg-surface border-border z-50 shadow-md">
-                                                <SelectItem value="new_client" className="text-[var(--brand)] font-medium focus:bg-[var(--brand)]/10 cursor-pointer">
-                                                    <div className="flex items-center">
-                                                        <Plus className="h-4 w-4 mr-2" />
+                                        <Popover open={comboOpen} onOpenChange={setComboOpen}>
+                                            <PopoverTrigger asChild>
+                                                <button
+                                                    type="button"
+                                                    className="w-full flex items-center justify-between h-10 px-3 py-2 bg-surface2 border border-border rounded-md text-sm text-left hover:bg-surface-hover transition-colors disabled:opacity-50"
+                                                    disabled={clientsLoading}
+                                                >
+                                                    <span className={field.value && clients?.find(c => c.id === field.value) ? 'text-text' : 'text-text-muted'}>
+                                                        {field.value && clients?.find(c => c.id === field.value)
+                                                            ? clients!.find(c => c.id === field.value)!.name
+                                                            : clientsLoading ? 'Chargement...' : 'Sélectionner un client'}
+                                                    </span>
+                                                    <ChevronsUpDown className="h-4 w-4 text-text-muted shrink-0" />
+                                                </button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="p-0 bg-white border-border shadow-lg" style={{ width: 'var(--radix-popover-trigger-width)' }} align="start">
+                                                <div className="p-2 border-b border-border">
+                                                    <Input
+                                                        placeholder="Rechercher un client..."
+                                                        value={comboSearch}
+                                                        onChange={(e) => setComboSearch(e.target.value)}
+                                                        className="h-8 bg-surface2 border-border text-sm"
+                                                        autoFocus
+                                                    />
+                                                </div>
+                                                <div className="max-h-52 overflow-y-auto">
+                                                    <button
+                                                        type="button"
+                                                        className="w-full flex items-center gap-2 px-3 py-2.5 text-sm text-brand font-medium hover:bg-brand-light/20 cursor-pointer text-left border-b border-border/50"
+                                                        onClick={() => { setComboOpen(false); setIsClientModalOpen(true); }}
+                                                    >
+                                                        <Plus className="h-4 w-4 shrink-0" />
                                                         Créer un nouveau client
-                                                    </div>
-                                                </SelectItem>
-
-                                                {clientsLoading ? null : clients?.length === 0 ? (
-                                                    <SelectItem value="empty" disabled>Aucun autre client trouvé</SelectItem>
-                                                ) : (
-                                                    clients?.map(c => (
-                                                        <SelectItem key={c.id} value={c.id} className="cursor-pointer">{c.name}</SelectItem>
-                                                    ))
-                                                )}
-                                            </SelectContent>
-                                        </Select>
+                                                    </button>
+                                                    {clients?.filter(c => c.name.toLowerCase().includes(comboSearch.toLowerCase())).map(c => {
+                                                        const city = extractCity(c.address);
+                                                        return (
+                                                            <button
+                                                                key={c.id}
+                                                                type="button"
+                                                                className="w-full flex items-center justify-between px-3 py-2.5 text-sm hover:bg-surface2 cursor-pointer text-left"
+                                                                onClick={() => { field.onChange(c.id); setComboOpen(false); setComboSearch(''); }}
+                                                            >
+                                                                <span className="text-text">{c.name}</span>
+                                                                {city && <span className="text-xs text-text-muted ml-2 shrink-0">{city}</span>}
+                                                            </button>
+                                                        );
+                                                    })}
+                                                    {clients?.filter(c => c.name.toLowerCase().includes(comboSearch.toLowerCase())).length === 0 && comboSearch && (
+                                                        <p className="px-3 py-4 text-xs text-text-muted text-center">Aucun résultat</p>
+                                                    )}
+                                                    {clients?.length === 0 && !comboSearch && (
+                                                        <p className="px-3 py-4 text-xs text-text-muted text-center">Aucun client trouvé</p>
+                                                    )}
+                                                </div>
+                                            </PopoverContent>
+                                        </Popover>
                                         <FormMessage />
                                     </div>
                                 )} />
@@ -319,7 +336,7 @@ export default function ProjectWizard() {
                             <Button type="button" variant="outline" onClick={() => setStep(2)} className="border-border hover:bg-surface2" disabled={createProject.isPending}>
                                 <ArrowLeft className="mr-2 h-4 w-4" /> Retour
                             </Button>
-                            <Button onClick={handleFinalSubmit} disabled={createProject.isPending} className="bg-accent text-bg hover:opacity-90">
+                            <Button onClick={handleFinalSubmit} disabled={createProject.isPending || !canCreateProject} className="bg-accent text-bg hover:opacity-90 disabled:opacity-60">
                                 {createProject.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
                                 Créer le projet
                             </Button>

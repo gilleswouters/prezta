@@ -6,16 +6,21 @@ import { CataloguePickerModal } from '@/components/quotes/CataloguePickerModal';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Save, Plus, Sparkles, Loader2, Play, Trash2, Eye, Edit3, Download, Receipt } from 'lucide-react';
-import { generateQuoteFromBrief } from '@/lib/gemini';
-import { useDeleteProject } from '@/hooks/useProjects';
-import { useQuoteByProject, useSaveQuote } from '@/hooks/useQuotes';
+import { ArrowLeft, Save, Plus, Sparkles, Loader2, Play, Trash2, Eye, Edit3, Download, Receipt, Send, AlertCircle } from 'lucide-react';
+import { generateDocumentName } from '@/lib/document-naming';
+import { Unit } from '@/types/product';
+import { trackEvent } from '@/lib/plausible';
+import { useDeleteProject, useProjectById } from '@/hooks/useProjects';
+import { useQuoteByProject, useSaveQuote, useUpdateQuoteStatus } from '@/hooks/useQuotes';
 import { useProfile } from '@/hooks/useProfile';
 import { useCreateInvoice } from '@/hooks/useInvoices';
 import { InvoiceStatus } from '@/types/invoice';
-import { PDFViewer, PDFDownloadLink } from '@react-pdf/renderer';
+import { SendForSignatureModal } from '@/components/contracts/SendForSignatureModal';
+import { supabase } from '@/lib/supabase';
+import { PDFViewer, PDFDownloadLink, pdf } from '@react-pdf/renderer';
 import { QuotePDFDocument } from '@/components/quotes/pdf/QuotePDFDocument';
 import { toast } from 'sonner';
+import { ProfileCompleteBanner } from '@/components/ui/ProfileCompleteBanner';
 
 export default function QuoteBuilderPage() {
     const { id } = useParams();
@@ -23,13 +28,18 @@ export default function QuoteBuilderPage() {
     const store = useQuoteStore();
     const deleteProject = useDeleteProject();
     const { data: profile } = useProfile();
+    const { data: project } = useProjectById(id);
     const { data: dbQuote } = useQuoteByProject(id);
     const saveQuote = useSaveQuote();
     const createInvoice = useCreateInvoice();
+    const updateQuoteStatus = useUpdateQuoteStatus();
 
     const [aiBrief, setAiBrief] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
     const [viewMode, setViewMode] = useState<'editor' | 'preview'>('editor');
+    const [sendModalOpen, setSendModalOpen] = useState(false);
+    const [isSending, setIsSending] = useState(false);
+    const [signerError, setSignerError] = useState(false);
 
     useEffect(() => {
         if (id) {
@@ -45,7 +55,13 @@ export default function QuoteBuilderPage() {
                 // force trigger re-render de la page par zustand
                 store.updateMetadata(dbQuote.title, dbQuote.notes);
             } else {
+                // Capture pending lines before initializeQuote resets the store
+                const pending = store.pendingTimesheetLines;
                 store.initializeQuote(id);
+                if (pending && pending.length > 0) {
+                    store.setLinesFromAI(pending);
+                    store.setPendingTimesheetLines(null);
+                }
             }
         }
     }, [id, dbQuote]);
@@ -60,12 +76,27 @@ export default function QuoteBuilderPage() {
 
         setIsGenerating(true);
         try {
-            const generatedLines = await generateQuoteFromBrief(aiBrief);
-            store.setLinesFromAI(generatedLines);
+            const { data, error: fnError } = await supabase.functions.invoke('generate-quote-brief', {
+                body: { brief: aiBrief },
+            });
+
+            if (fnError) throw fnError;
+
+            const raw = data as { lines: Array<{
+                name: string;
+                description?: string;
+                quantity: number;
+                unitPrice: number;
+                tvaRate: number;
+                unit: string;
+            }> };
+            const typedLines = raw.lines.map(l => ({ ...l, unit: (l.unit as Unit) }));
+            store.setLinesFromAI(typedLines);
             toast.success('Lignes générées par l\'IA avec succès.');
             setAiBrief('');
-        } catch (error: any) {
-            toast.error(error.message || 'Erreur lors de la génération.');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Erreur lors de la génération.';
+            toast.error(message);
         } finally {
             setIsGenerating(false);
         }
@@ -73,7 +104,12 @@ export default function QuoteBuilderPage() {
 
     const handleSave = async () => {
         if (!id) return;
-        saveQuote.mutate({ projectId: id, payload: store.data });
+        const isNew = !dbQuote;
+        saveQuote.mutate({ projectId: id, payload: store.data }, {
+            onSuccess: () => {
+                if (isNew) trackEvent('quote_created');
+            },
+        });
     };
 
     const handleDeleteProject = async () => {
@@ -109,8 +145,84 @@ export default function QuoteBuilderPage() {
         }
     };
 
+    const handleRequestSend = () => {
+        if (!project?.clients?.contact_name) {
+            setSignerError(true);
+            return;
+        }
+        setSignerError(false);
+        setSendModalOpen(true);
+    };
+
+    const handleSendToFirma = async () => {
+        const toastId = toast.loading('Génération du document (1/2)...');
+        setIsSending(true);
+        try {
+            const blob = await pdf(
+                <QuotePDFDocument
+                    data={store.data}
+                    totals={{ subtotalHT, tvaAmounts, totalTVA, totalTTC }}
+                    profile={profile || null}
+                />
+            ).toBlob();
+
+            const reader = new FileReader();
+            reader.readAsDataURL(blob);
+
+            reader.onloadend = async () => {
+                try {
+                    const base64data = reader.result?.toString().split(',')[1];
+                    if (!base64data) throw new Error('Erreur de conversion PDF');
+
+                    toast.loading('Envoi sécurisé via Firma.dev (2/2)...', { id: toastId });
+
+                    const clientEmail = project?.clients?.email;
+                    if (!clientEmail) throw new Error("Le client n'a pas d'adresse e-mail définie.");
+
+                    const clientName = project!.clients!.contact_name!;
+
+                    const { data, error } = await supabase.functions.invoke('firma-signature', {
+                        headers: {
+                            Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+                        },
+                        body: { pdfBase64: base64data, title: store.data.title, clientName, clientEmail },
+                    });
+
+                    if (error) throw error;
+
+                    const body = data as { firmaId?: string; error?: string } | null;
+                    if (body?.error) throw new Error(body.error);
+
+                    await updateQuoteStatus.mutateAsync({
+                        id: dbQuote!.id,
+                        status: 'sent',
+                        signatureId: body?.firmaId,
+                    });
+
+                    trackEvent('signature_requested');
+                    toast.success('Envoyé pour signature avec succès !', { id: toastId });
+                } catch (err) {
+                    const message = err instanceof Error ? err.message : "Erreur lors de l'envoi";
+                    toast.error(message, { id: toastId });
+                } finally {
+                    setIsSending(false);
+                }
+            };
+
+            reader.onerror = () => {
+                toast.error('Erreur de lecture du PDF', { id: toastId });
+                setIsSending(false);
+            };
+        } catch (err) {
+            const message = err instanceof Error ? err.message : "Erreur lors de l'envoi";
+            toast.error(message, { id: toastId });
+            setIsSending(false);
+        }
+    };
+
     return (
         <div className="space-y-8 pb-32">
+            <ProfileCompleteBanner profile={profile} />
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-border pb-6">
                 <div className="flex items-center gap-4 w-full">
@@ -143,7 +255,14 @@ export default function QuoteBuilderPage() {
                     </Button>
                 </div>
 
-                <div className="flex gap-2 w-full sm:w-auto mt-4 sm:mt-0">
+                <div className="flex flex-col gap-2 w-full sm:w-auto mt-4 sm:mt-0">
+                    {signerError && (
+                        <div className="flex items-center gap-2 text-xs text-danger bg-danger-light/40 border border-danger/20 rounded-lg px-3 py-2">
+                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                            Ajoutez le nom du signataire dans la fiche client avant d'envoyer.
+                        </div>
+                    )}
+                    <div className="flex gap-2">
                     {dbQuote && (
                         <Button
                             onClick={handleConvertToInvoice}
@@ -155,6 +274,22 @@ export default function QuoteBuilderPage() {
                             Créer Facture
                         </Button>
                     )}
+                    {dbQuote && (!dbQuote.status || dbQuote.status === 'draft' || dbQuote.status === 'sent') && (
+                        <Button
+                            onClick={handleRequestSend}
+                            disabled={isSending}
+                            variant="outline"
+                            className="text-brand hover:text-brand hover:bg-brand-light border-brand/30 font-semibold h-10 px-4 shrink-0 shadow-sm"
+                            title="Envoyer pour signature"
+                        >
+                            {isSending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                                <Send className="h-4 w-4 mr-2" />
+                            )}
+                            Signer
+                        </Button>
+                    )}
                     <Button onClick={handleDeleteProject} variant="outline" className="text-danger hover:text-danger-hover border-danger-light hover:bg-danger-light font-semibold h-10 px-4 shrink-0 shadow-sm" title="Supprimer le projet">
                         <Trash2 className="h-4 w-4" />
                     </Button>
@@ -162,6 +297,7 @@ export default function QuoteBuilderPage() {
                         <Save className="h-4 w-4 mr-2" />
                         Enregistrer
                     </Button>
+                    </div>
                 </div>
             </div>
 
@@ -281,7 +417,12 @@ export default function QuoteBuilderPage() {
                     <div className="w-full flex justify-end max-w-4xl">
                         <PDFDownloadLink
                             document={<QuotePDFDocument data={store.data} totals={{ subtotalHT, tvaAmounts, totalTVA, totalTTC }} profile={profile || null} />}
-                            fileName={`Devis_${store.data.title.replace(/\s+/g, '_')}.pdf`}
+                            fileName={generateDocumentName(
+                                'Devis',
+                                profile?.company_name || profile?.full_name || 'CLIENT',
+                                dbQuote?.created_at || new Date().toISOString(),
+                                dbQuote?.version ?? 1,
+                            )}
                             className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-all disabled:pointer-events-none disabled:opacity-50 shrink-0 h-10 px-6 bg-brand text-white hover:bg-brand-hover shadow-md"
                         >
                             {({ loading }) => (
@@ -300,6 +441,16 @@ export default function QuoteBuilderPage() {
                     </div>
                 </div>
             )}
+
+            <SendForSignatureModal
+                open={sendModalOpen}
+                onOpenChange={setSendModalOpen}
+                signerName={project?.clients?.contact_name ?? ''}
+                signerEmail={project?.clients?.email ?? ''}
+                documentTitle={store.data.title}
+                documentType="Devis"
+                onConfirm={handleSendToFirma}
+            />
         </div>
     );
 }

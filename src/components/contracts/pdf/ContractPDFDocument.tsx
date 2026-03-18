@@ -68,7 +68,7 @@ interface ContractPDFDocumentProps {
 }
 
 export function ContractPDFDocument({ contract, profile }: ContractPDFDocumentProps) {
-    const legalMentions = getLegalMentions(profile);
+    const legalMentions = getLegalMentions(profile, 'contract');
 
     // Basic Markdown to text converter (removes #, **, etc.)
     const cleanContent = contract.content

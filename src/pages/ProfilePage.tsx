@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useProfile, useUpdateProfile, useUploadLogo } from '@/hooks/useProfile';
+import { useProfile, useUpdateProfile, useUploadLogo, StorageLimitError } from '@/hooks/useProfile';
 import { profileSchema } from '@/lib/validations/profile';
 import type { ProfileFormValues } from '@/lib/validations/profile';
 import { Country, LegalStatus } from '@/types/profile';
+import { StorageBar } from '@/components/ui/StorageBar';
+import { StorageLimitModal } from '@/components/ui/StorageLimitModal';
+import { useStorageUsage } from '@/hooks/useStorageUsage';
 import { toast } from 'sonner';
 
 import {
@@ -21,12 +24,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Switch } from '@/components/ui/switch';
 
 export default function ProfilePage() {
     const { data: profile, isLoading } = useProfile();
     const updateProfile = useUpdateProfile();
     const uploadLogo = useUploadLogo();
+    const { used, limit } = useStorageUsage();
     const [logoFile, setLogoFile] = useState<File | null>(null);
+    const [storageLimitOpen, setStorageLimitOpen] = useState(false);
 
     const form = useForm<ProfileFormValues>({
         resolver: zodResolver(profileSchema),
@@ -34,8 +40,8 @@ export default function ProfilePage() {
             full_name: '',
             phone: '',
             company_name: '',
-            country: Country.BE,
-            legal_status: LegalStatus.INDEPENDANT_BE,
+            country: Country.FR, // TODO: add BE/CH when ready
+            legal_status: LegalStatus.AUTO_ENTREPRENEUR_FR,
             bce_number: '',
             siret_number: '',
             vat_number: '',
@@ -49,8 +55,7 @@ export default function ProfilePage() {
         }
     });
 
-    const { watch, reset, setValue } = form;
-    const currentCountry = watch('country');
+    const { setValue, reset } = form;
 
     useEffect(() => {
         if (profile) {
@@ -58,8 +63,8 @@ export default function ProfilePage() {
                 full_name: profile.full_name || '',
                 phone: profile.phone || '',
                 company_name: profile.company_name || '',
-                country: profile.country || Country.BE,
-                legal_status: profile.legal_status || LegalStatus.INDEPENDANT_BE,
+                country: Country.FR, // TODO: add BE/CH when ready
+                legal_status: profile.legal_status || LegalStatus.AUTO_ENTREPRENEUR_FR,
                 bce_number: profile.bce_number || '',
                 siret_number: profile.siret_number || '',
                 vat_number: profile.vat_number || '',
@@ -91,7 +96,6 @@ export default function ProfilePage() {
         try {
             let finalLogoUrl = data.logo_url;
             if (logoFile) {
-                // We do not wait for the promise to complete fully via UI block but inside the try block
                 finalLogoUrl = await uploadLogo.mutateAsync(logoFile);
             }
 
@@ -100,6 +104,10 @@ export default function ProfilePage() {
                 logo_url: finalLogoUrl
             });
         } catch (error) {
+            if (error instanceof StorageLimitError) {
+                setStorageLimitOpen(true);
+                return;
+            }
             console.error(error);
             // Toast already handled by mutation
         }
@@ -114,7 +122,19 @@ export default function ProfilePage() {
     }
 
     return (
-        <div className="max-w-3xl mx-auto py-10 px-4">
+        <div className="max-w-3xl mx-auto py-10 px-4 space-y-6">
+            <StorageLimitModal
+                open={storageLimitOpen}
+                onOpenChange={setStorageLimitOpen}
+                used={used}
+                limit={limit}
+            />
+
+            {/* Storage Usage */}
+            <div className="bg-white border border-border rounded-xl p-5">
+                <StorageBar />
+            </div>
+
             <Card className="bg-surface border-border">
                 <CardHeader>
                     <CardTitle className="text-2xl font-serif text-text">Profil & Informations Légales</CardTitle>
@@ -147,7 +167,7 @@ export default function ProfilePage() {
                                         <div className="space-y-2">
                                             <FormLabel className="text-text">Téléphone</FormLabel>
                                             <FormControl>
-                                                <Input placeholder="+32 400 00 00 00" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                                <Input placeholder="06 12 34 56 78" className="bg-surface2 border-border" {...field} value={field.value || ''} />
                                             </FormControl>
                                             <FormMessage />
                                         </div>
@@ -162,24 +182,12 @@ export default function ProfilePage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="country" render={({ field }) => (
                                         <div className="space-y-2">
-                                            <FormLabel className="text-text">Pays *</FormLabel>
-                                            <Select defaultValue={field.value} onValueChange={(val) => {
-                                                field.onChange(val);
-                                                // Reset strict specific fields when changing country
-                                                if (val === Country.FR) setValue('bce_number', '');
-                                                if (val === Country.BE) setValue('siret_number', '');
-                                            }}>
-                                                <FormControl>
-                                                    <SelectTrigger className="bg-surface2 border-border">
-                                                        <SelectValue placeholder="Sélectionnez un pays" />
-                                                    </SelectTrigger>
-                                                </FormControl>
-                                                <SelectContent>
-                                                    <SelectItem value={Country.BE}>Belgique (BE)</SelectItem>
-                                                    <SelectItem value={Country.FR}>France (FR)</SelectItem>
-                                                    <SelectItem value={Country.CH}>Suisse (CH)</SelectItem>
-                                                </SelectContent>
-                                            </Select>
+                                            {/* TODO: add BE/CH when ready */}
+                                            <FormLabel className="text-text">Pays</FormLabel>
+                                            <input type="hidden" {...field} value={Country.FR} />
+                                            <div className="h-10 px-3 py-2 bg-surface2 border border-border rounded-md text-sm flex items-center gap-2 text-text-muted select-none">
+                                                🇫🇷 France
+                                            </div>
                                             <FormMessage />
                                         </div>
                                     )} />
@@ -187,27 +195,18 @@ export default function ProfilePage() {
                                     <FormField control={form.control} name="legal_status" render={({ field }) => (
                                         <div className="space-y-2">
                                             <FormLabel className="text-text">Statut Juridique *</FormLabel>
-                                            <Select defaultValue={field.value} onValueChange={field.onChange}>
+                                            <Select defaultValue={field.value} onValueChange={field.onChange} value={field.value}>
                                                 <FormControl>
                                                     <SelectTrigger className="bg-surface2 border-border">
                                                         <SelectValue placeholder="Statut légal" />
                                                     </SelectTrigger>
                                                 </FormControl>
-                                                <SelectContent>
-                                                    {currentCountry === Country.BE && (
-                                                        <>
-                                                            <SelectItem value={LegalStatus.INDEPENDANT_BE}>Indépendant (BE)</SelectItem>
-                                                            <SelectItem value={LegalStatus.SRL_BE}>SRL (BE)</SelectItem>
-                                                            <SelectItem value={LegalStatus.SA_BE}>SA (BE)</SelectItem>
-                                                        </>
-                                                    )}
-                                                    {currentCountry === Country.FR && (
-                                                        <>
-                                                            <SelectItem value={LegalStatus.AUTO_ENTREPRENEUR_FR}>Auto-entrepreneur (FR)</SelectItem>
-                                                            <SelectItem value={LegalStatus.EURL}>EURL (FR)</SelectItem>
-                                                            <SelectItem value={LegalStatus.SASU}>SASU (FR)</SelectItem>
-                                                        </>
-                                                    )}
+                                                <SelectContent className="bg-white">
+                                                    <SelectItem value={LegalStatus.AUTO_ENTREPRENEUR_FR}>Auto-entrepreneur</SelectItem>
+                                                    <SelectItem value={LegalStatus.EURL}>EURL</SelectItem>
+                                                    <SelectItem value={LegalStatus.SASU}>SASU</SelectItem>
+                                                    <SelectItem value={LegalStatus.SAS}>SAS</SelectItem>
+                                                    <SelectItem value={LegalStatus.SARL}>SARL</SelectItem>
                                                     <SelectItem value={LegalStatus.AUTRE}>Autre</SelectItem>
                                                 </SelectContent>
                                             </Select>
@@ -251,36 +250,22 @@ export default function ProfilePage() {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* CONDITIONAL VAT/BCE/SIRET */}
-                                    {currentCountry === Country.BE && (
-                                        <FormField control={form.control} name="bce_number" render={({ field }) => (
-                                            <div className="space-y-2">
-                                                <FormLabel className="text-text">Numéro BCE *</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="0123.456.789" className="bg-surface2 border-border" {...field} value={field.value || ''} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </div>
-                                        )} />
-                                    )}
-
-                                    {currentCountry === Country.FR && (
-                                        <FormField control={form.control} name="siret_number" render={({ field }) => (
-                                            <div className="space-y-2">
-                                                <FormLabel className="text-text">Numéro SIRET *</FormLabel>
-                                                <FormControl>
-                                                    <Input placeholder="123 456 789 00012" className="bg-surface2 border-border" {...field} value={field.value || ''} />
-                                                </FormControl>
-                                                <FormMessage />
-                                            </div>
-                                        )} />
-                                    )}
+                                    {/* France only — TODO: add BE/CH when ready */}
+                                    <FormField control={form.control} name="siret_number" render={({ field }) => (
+                                        <div className="space-y-2">
+                                            <FormLabel className="text-text">Numéro SIRET *</FormLabel>
+                                            <FormControl>
+                                                <Input placeholder="123 456 789 00012" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </div>
+                                    )} />
 
                                     <FormField control={form.control} name="vat_number" render={({ field }) => (
                                         <div className="space-y-2">
                                             <FormLabel className="text-text">Numéro de TVA</FormLabel>
                                             <FormControl>
-                                                <Input placeholder={currentCountry === Country.BE ? "BE0123456789" : "FRXX0123456789"} className="bg-surface2 border-border uppercase" {...field} value={field.value || ''} />
+                                                <Input placeholder="FR00 123 456 789" className="bg-surface2 border-border uppercase" {...field} value={field.value || ''} />
                                             </FormControl>
                                             <FormMessage />
                                         </div>
@@ -296,7 +281,7 @@ export default function ProfilePage() {
                                     <div className="space-y-2">
                                         <FormLabel className="text-text">IBAN de réception</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="BE68 0000 0000 0000" className="bg-surface2 border-border uppercase tracking-widest" {...field} value={field.value || ''} />
+                                            <Input placeholder="FR76 3000 6000 0112 3456 7890 189" className="bg-surface2 border-border uppercase tracking-widest" {...field} value={field.value || ''} />
                                         </FormControl>
                                         <FormMessage />
                                     </div>
@@ -308,7 +293,7 @@ export default function ProfilePage() {
                                             <div className="space-y-2">
                                                 <FormLabel className="text-text">Rue & Numéro</FormLabel>
                                                 <FormControl>
-                                                    <Input placeholder="Rue de la Paix, 10" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                                    <Input placeholder="12 rue de la Paix" className="bg-surface2 border-border" {...field} value={field.value || ''} />
                                                 </FormControl>
                                                 <FormMessage />
                                             </div>
@@ -318,7 +303,7 @@ export default function ProfilePage() {
                                         <div className="space-y-2">
                                             <FormLabel className="text-text">Code Postal</FormLabel>
                                             <FormControl>
-                                                <Input placeholder="1000" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                                <Input placeholder="75001" className="bg-surface2 border-border" {...field} value={field.value || ''} />
                                             </FormControl>
                                             <FormMessage />
                                         </div>
@@ -329,7 +314,7 @@ export default function ProfilePage() {
                                     <div className="space-y-2">
                                         <FormLabel className="text-text">Ville</FormLabel>
                                         <FormControl>
-                                            <Input placeholder="Bruxelles" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                            <Input placeholder="Paris" className="bg-surface2 border-border" {...field} value={field.value || ''} />
                                         </FormControl>
                                         <FormMessage />
                                     </div>
@@ -371,6 +356,35 @@ export default function ProfilePage() {
                     </form>
                 </Form>
             </Card>
-        </div >
+
+            {/* Notifications preferences */}
+            <Card className="bg-surface border-border">
+                <CardHeader>
+                    <CardTitle className="text-base font-bold text-text-primary">Notifications</CardTitle>
+                    <CardDescription className="text-text-muted text-sm">
+                        Gérez vos préférences de notifications automatiques.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="flex items-center justify-between gap-4 py-2">
+                        <div>
+                            <p className="text-sm font-semibold text-text-primary">
+                                Alertes de saisonnalité
+                            </p>
+                            <p className="text-xs text-text-muted mt-0.5">
+                                Recevoir un email le 1er de chaque mois si le mois suivant est
+                                historiquement calme (nécessite 12 mois de données).
+                            </p>
+                        </div>
+                        <Switch
+                            checked={profile?.seasonality_enabled ?? true}
+                            onCheckedChange={async (checked) => {
+                                await updateProfile.mutateAsync({ seasonality_enabled: checked });
+                            }}
+                        />
+                    </div>
+                </CardContent>
+            </Card>
+        </div>
     );
 }

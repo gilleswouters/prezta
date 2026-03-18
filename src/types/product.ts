@@ -22,6 +22,7 @@ export interface Product {
     tva_rate: number;
     unit: Unit;
     is_favorite: boolean;
+    category: string | null;
     created_at: string;
 }
 

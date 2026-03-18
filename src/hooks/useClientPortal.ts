@@ -16,6 +16,7 @@ export const useClientPortal = (portalLink: string | undefined) => {
                     *,
                     clients (
                         name,
+                        contact_name,
                         email,
                         address,
                         vat_number,
@@ -23,11 +24,17 @@ export const useClientPortal = (portalLink: string | undefined) => {
                     )
                 `)
                 .eq('portal_link', portalLink)
+                .eq('portal_enabled', true)
                 .single();
 
             if (projectError || !projectData) {
                 console.error("Project fetch error:", projectError);
                 throw new Error("Projet introuvable ou lien expiré.");
+            }
+
+            // Check expiry client-side (DB value may not be enforced by RLS)
+            if (projectData.portal_expires_at && new Date(projectData.portal_expires_at) < new Date()) {
+                throw new Error("Ce portail a expiré.");
             }
 
             const projectId = projectData.id;

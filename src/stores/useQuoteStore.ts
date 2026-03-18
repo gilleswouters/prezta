@@ -6,10 +6,12 @@ import type { Product } from '@/types/product';
 interface QuoteState {
     data: QuoteData;
     isLoading: boolean;
+    pendingTimesheetLines: QuoteLine[] | null;
 
     // Actions
     initializeQuote: (projectId: string, clientId?: string) => void;
     updateMetadata: (title: string, notes?: string) => void;
+    setPendingTimesheetLines: (lines: QuoteLine[] | null) => void;
 
     // Lignes
     addLine: () => void;
@@ -41,6 +43,9 @@ export const useQuoteStore = create<QuoteState>((set, get) => ({
         lines: [createEmptyLine()],
     },
     isLoading: false,
+    pendingTimesheetLines: null,
+
+    setPendingTimesheetLines: (lines) => set({ pendingTimesheetLines: lines }),
 
     initializeQuote: (projectId, clientId) => set({
         data: {
