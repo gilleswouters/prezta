@@ -36,5 +36,8 @@ verify_jwt = false
 [functions.lemon-squeezy-webhook]
 verify_jwt = false
 
+[functions.export-comptable]
+verify_jwt = false
+
 [functions.send-invoice-reminder]
 verify_jwt = false

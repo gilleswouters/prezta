@@ -63,30 +63,19 @@ export default function ExportComptablePage() {
 
         setIsLoading(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (!session?.access_token) throw new Error('Session expirée — reconnectez-vous.');
-
-            const body: { year: number; month?: number; types: string[] } = {
+            const invokeBody: { year: number; month?: number; types: string[] } = {
                 year,
                 types: selectedTypes,
             };
-            if (month !== 'all') body.month = parseInt(month, 10);
+            if (month !== 'all') invokeBody.month = parseInt(month, 10);
 
-            const res = await fetch('/api/export-comptable', {
-                method:  'POST',
-                headers: {
-                    'Authorization': `Bearer ${session.access_token}`,
-                    'Content-Type':  'application/json',
-                },
-                body: JSON.stringify(body),
+            const { data, error } = await supabase.functions.invoke('export-comptable', {
+                body: invokeBody,
             });
 
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({ error: 'Erreur inconnue' })) as { error?: string };
-                throw new Error(err.error ?? 'Échec de la génération');
-            }
+            if (error) throw new Error(error.message ?? 'Échec de la génération');
 
-            const blob     = await res.blob();
+            const blob     = new Blob([data as ArrayBuffer], { type: 'application/zip' });
             const suffix   = month !== 'all' ? `-${month.padStart(2, '0')}` : '';
             const filename = `Prezta-Export-Comptable-${year}${suffix}.zip`;
 

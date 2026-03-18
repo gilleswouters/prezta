@@ -1,67 +1,75 @@
-import { createClient } from '@supabase/supabase-js';
-import JSZip from 'jszip';
+// @deno-types="https://esm.sh/v135/jszip@3.10.1/index.d.ts"
+import JSZip from 'https://esm.sh/jszip@3.10.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-export const config = { runtime: 'nodejs' };
+const corsHeaders = {
+    'Access-Control-Allow-Origin':  '*',
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface RequestBody {
-    year: number;
+    year:   number;
     month?: number;
-    types: string[];
+    types:  string[];
 }
 
 type InvoiceRow = {
-    id: string;
-    reference: string | null;
-    amount: number;
-    status: string;
+    id:         string;
+    reference:  string | null;
+    amount:     number;
+    status:     string;
     created_at: string;
-    due_date: string | null;
-    projects: { name: string; clients: { name: string } | null } | null;
+    due_date:   string | null;
+    projects:   { name: string; clients: { name: string } | null } | null;
 };
 
 type QuoteRow = {
-    id: string;
-    title: string;
-    amount: number | null;
-    status: string;
+    id:         string;
+    title:      string;
+    amount:     number | null;
+    status:     string;
     created_at: string;
-    projects: { name: string; clients: { name: string } | null } | null;
+    projects:   { name: string; clients: { name: string } | null } | null;
 };
 
 type ContractRow = {
-    id: string;
-    title: string;
-    status: string;
+    id:         string;
+    title:      string;
+    status:     string;
     created_at: string;
-    projects: { name: string; clients: { name: string } | null } | null;
+    projects:   { name: string; clients: { name: string } | null } | null;
 };
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
-export default async function handler(req: Request): Promise<Response> {
+Deno.serve(async (req: Request) => {
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: corsHeaders });
+    }
+
     if (req.method !== 'POST') {
-        return new Response('Method not allowed', { status: 405 });
+        return new Response('Method not allowed', { status: 405, headers: corsHeaders });
     }
 
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
+    const apiKeyHeader = req.headers.get('apikey');
+    const token = authHeader?.replace('Bearer ', '') ?? apiKeyHeader;
+
+    if (!token) {
         return json({ error: 'Non autorisé' }, 401);
     }
 
-    const supabaseUrl  = process.env.SUPABASE_URL ?? '';
-    const serviceKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
-    const anonKey      = process.env.SUPABASE_ANON_KEY ?? '';
-
-    if (!supabaseUrl || !serviceKey || !anonKey) {
-        return json({ error: 'Configuration serveur manquante' }, 500);
-    }
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const anonKey     = Deno.env.get('SUPABASE_ANON_KEY')!;
+    const serviceKey  = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     // Verify JWT
-    const anonClient = createClient(supabaseUrl, anonKey);
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await anonClient.auth.getUser(token);
+    const userClient = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: `Bearer ${token}` } },
+    });
+    const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) {
         return json({ error: 'Non autorisé' }, 401);
     }
@@ -85,7 +93,7 @@ export default async function handler(req: Request): Promise<Response> {
         ? new Date(year, month - 1, 1)
         : new Date(year, 0, 1);
     const endDate = month
-        ? new Date(year, month, 0, 23, 59, 59)   // last day of month
+        ? new Date(year, month, 0, 23, 59, 59)
         : new Date(year, 11, 31, 23, 59, 59);
 
     const zip = new JSZip();
@@ -161,17 +169,15 @@ export default async function handler(req: Request): Promise<Response> {
 
     // ── Build ZIP ─────────────────────────────────────────────────────────────
 
-    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
-    const suffix = month ? `-${String(month).padStart(2, '0')}` : '';
-    const filename = `Prezta-Export-Comptable-${year}${suffix}.zip`;
+    const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
 
     return new Response(zipBuffer, {
         headers: {
+            ...corsHeaders,
             'Content-Type': 'application/zip',
-            'Content-Disposition': `attachment; filename="${filename}"`,
         },
     });
-}
+});
 
 // ─── CSV generator ────────────────────────────────────────────────────────────
 
@@ -238,6 +244,6 @@ function sanitize(s: string): string {
 function json(body: Record<string, unknown>, status: number): Response {
     return new Response(JSON.stringify(body), {
         status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 }
