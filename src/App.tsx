@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import MaintenancePage from '@/pages/MaintenancePage';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { ProtectedRoute } from '@/components/ProtectedRoute'
@@ -41,6 +42,15 @@ const PageFallback = (
 )
 
 function App() {
+  const isMaintenanceMode = import.meta.env.VITE_MAINTENANCE_MODE === 'true'
+  const isPreviewBypass =
+    window.location.pathname === '/admin-preview' &&
+    new URLSearchParams(window.location.search).get('key') === 'prezta-admin-2026'
+
+  if (isMaintenanceMode && !isPreviewBypass) {
+    return <MaintenancePage />
+  }
+
   return (
     <AuthProvider>
       <BrowserRouter>
