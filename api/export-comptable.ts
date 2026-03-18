@@ -161,7 +161,7 @@ export default async function handler(req: Request): Promise<Response> {
 
     // ── Build ZIP ─────────────────────────────────────────────────────────────
 
-    const zipBuffer = await zip.generateAsync({ type: 'arraybuffer' });
+    const zipBuffer = await zip.generateAsync({ type: 'nodebuffer' });
     const suffix = month ? `-${String(month).padStart(2, '0')}` : '';
     const filename = `Prezta-Export-Comptable-${year}${suffix}.zip`;
 
