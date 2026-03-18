@@ -12,7 +12,7 @@ import {
 import { useProfile } from '@/hooks/useProfile';
 import { useProjects } from '@/hooks/useProjects';
 import { useClients } from '@/hooks/useClients';
-import { supabase } from '@/lib/supabase';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '@/lib/supabase';
 import { useProducts } from '@/hooks/useProducts';
 
 interface Message {
@@ -68,12 +68,12 @@ export function ChatAssistant({ isOpen, onClose }: { isOpen: boolean, onClose: (
             const { data: { session } } = await supabase.auth.getSession();
             if (!session?.access_token) throw new Error("Not authenticated");
 
-            const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat-assistant`, {
+            const res = await fetch(`${SUPABASE_URL}/functions/v1/chat-assistant`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${session.access_token}`,
-                    'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY,
+                    'apikey': SUPABASE_ANON_KEY,
                 },
                 body: JSON.stringify({ messages: messagePayload })
             });
