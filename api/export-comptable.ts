@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import JSZip from 'jszip';
 
-export const config = { runtime: 'edge' };
+export const config = { runtime: 'nodejs' };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
