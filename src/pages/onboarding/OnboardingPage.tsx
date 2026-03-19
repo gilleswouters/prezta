@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -10,7 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Check, Loader2, Sparkles, ArrowRight } from 'lucide-react'
+import { Check, Loader2, Sparkles, ArrowRight, LogOut } from 'lucide-react'
 import { LegalStatus } from '@/types/profile'
 
 // ── Lemon Squeezy checkout URLs ───────────────────────────────────────────────
@@ -34,6 +34,10 @@ function luhn(value: string): boolean {
     return sum % 10 === 0
 }
 
+// ── Strip spaces helper ────────────────────────────────────────────────────────
+const stripSpaces = (val: unknown) =>
+    typeof val === 'string' ? val.replace(/\s/g, '') : val
+
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 const step1Schema = z.object({
     full_name:    z.string().min(2, 'Requis (min 2 caractères)'),
@@ -41,25 +45,33 @@ const step1Schema = z.object({
 })
 
 const step2Schema = z.object({
-    legal_status:  z.enum(
+    legal_status: z.enum(
         ['independant_be', 'auto_entrepreneur_fr', 'eurl', 'sasu', 'srl_be', 'sa_be', 'autre'],
         { message: 'Statut juridique requis' }
     ),
-    siret_number: z
-        .string()
-        .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
-        .refine(luhn, 'SIRET invalide (clé de contrôle incorrecte)'),
+    // preprocess strips spaces so "123 456 789 00012" → "12345678900012"
+    siret_number: z.preprocess(
+        stripSpaces,
+        z.string()
+            .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
+            .refine(luhn, 'SIRET invalide (clé de contrôle incorrecte)')
+    ),
 })
 
 const step3Schema = z.object({
     address_street: z.string().optional(),
     address_city:   z.string().optional(),
-    address_zip:    z.string().optional().refine(
-        v => !v || /^\d{5}$/.test(v),
-        'Code postal invalide (5 chiffres)'
+    // strip spaces before validating zip
+    address_zip: z.preprocess(
+        stripSpaces,
+        z.string().optional().refine(
+            v => !v || /^\d{5}$/.test(v),
+            'Code postal invalide (5 chiffres)'
+        )
     ),
     phone: z.string().optional(),
-    iban:  z.string().optional(),
+    // strip spaces from IBAN (e.g. "FR76 3000 …" → "FR76300…")
+    iban: z.preprocess(stripSpaces, z.string().optional()),
 })
 
 type Step1Data = z.infer<typeof step1Schema>
@@ -125,8 +137,12 @@ export default function OnboardingPage() {
     const queryClient = useQueryClient()
     const [step, setStep] = useState(1)
     const [saving, setSaving] = useState(false)
+    // null = not waiting; 'starter'|'pro' = waiting for webhook after paid checkout
+    const [waitingForPayment, setWaitingForPayment] = useState<'starter' | 'pro' | null>(null)
+    const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-    // Safety exit: if already completed, go straight to dashboard
+    // ── Safety exit: already completed → dashboard ─────────────────────────
     const { data: profileData } = useQuery({
         queryKey: ['profile-onboarding', user?.id],
         queryFn: async () => {
@@ -148,20 +164,104 @@ export default function OnboardingPage() {
         }
     }, [profileData, navigate])
 
+    // ── FIX 5: Warn before leaving mid-onboarding ──────────────────────────
+    useEffect(() => {
+        const handler = (e: BeforeUnloadEvent) => {
+            e.preventDefault()
+        }
+        window.addEventListener('beforeunload', handler)
+        return () => window.removeEventListener('beforeunload', handler)
+    }, [])
+
+    // ── FIX 4: Poll subscriptions after paid checkout (Option B fallback) ──
+    useEffect(() => {
+        if (!waitingForPayment || !user?.id) return
+
+        pollRef.current = setInterval(async () => {
+            const { data } = await supabase
+                .from('subscriptions')
+                .select('plan, status')
+                .eq('user_id', user.id)
+                .eq('status', 'active')
+                .maybeSingle()
+
+            if (data && (data.plan === 'starter' || data.plan === 'pro')) {
+                if (pollRef.current) clearInterval(pollRef.current)
+                if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
+                setWaitingForPayment(null)
+                await finishOnboarding(false)
+            }
+        }, 3000)
+
+        // Stop polling after 10 minutes
+        pollTimeoutRef.current = setTimeout(() => {
+            if (pollRef.current) clearInterval(pollRef.current)
+            setWaitingForPayment(null)
+        }, 10 * 60 * 1000)
+
+        return () => {
+            if (pollRef.current) clearInterval(pollRef.current)
+            if (pollTimeoutRef.current) clearTimeout(pollTimeoutRef.current)
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [waitingForPayment, user?.id])
+
+    // ── Profile helpers ────────────────────────────────────────────────────
     const saveToProfile = async (updates: Record<string, unknown>) => {
         if (!user?.id) return
         await supabase.from('profiles').update(updates).eq('id', user.id)
     }
 
-    const finishOnboarding = async (extraUpdates?: Record<string, unknown>) => {
-        // Always persist completion flag — this is the source of truth for ProtectedRoute
-        await saveToProfile({ ...extraUpdates, onboarding_completed: true })
-        // Refetch (not just invalidate) so the cache is fresh before we navigate
+    // insertTrialSubscription: only called for the free plan choice
+    const insertTrialSubscription = async () => {
+        if (!user?.id) return
+        await supabase.from('subscriptions').upsert(
+            { user_id: user.id, plan: 'trial', status: 'active' },
+            { onConflict: 'user_id' }
+        )
+    }
+
+    // finishOnboarding: withTrialUpsert=true for free plan, false for paid (webhook handles it)
+    const finishOnboarding = async (withTrialUpsert = true) => {
+        if (withTrialUpsert) await insertTrialSubscription()
+        await saveToProfile({ onboarding_completed: true })
         await queryClient.refetchQueries({ queryKey: ['profile-onboarding', user?.id] })
+        await queryClient.invalidateQueries({ queryKey: ['subscription', user?.id] })
         navigate('/dashboard', { replace: true })
     }
 
-    // ── Step 1 ──────────────────────────────────────────────────────────────
+    // ── FIX 4: Open LS checkout — overlay first, new-tab fallback ──────────
+    const openPaidCheckout = (url: string, plan: 'starter' | 'pro') => {
+        if (typeof window.createLemonSqueezy === 'function') {
+            // Option A: Overlay
+            window.createLemonSqueezy()
+            window.LemonSqueezy?.Setup({
+                eventHandler: (event) => {
+                    if (event.event === 'Checkout.Success') {
+                        setWaitingForPayment(null)
+                        void finishOnboarding(false)
+                    }
+                },
+            })
+            window.LemonSqueezy?.Url.Open(`${url}?embed=1`)
+            // Also start polling as safety net (overlay might miss the event)
+            setWaitingForPayment(plan)
+        } else {
+            // Option B: new tab + poll
+            window.open(url, '_blank')
+            setWaitingForPayment(plan)
+        }
+    }
+
+    // ── FIX 5: Quit handler ────────────────────────────────────────────────
+    const handleQuit = () => {
+        const confirmed = window.confirm(
+            'Quitter la configuration ?\n\nVotre progression sera sauvegardée. Vous pourrez reprendre plus tard depuis votre tableau de bord.'
+        )
+        if (confirmed) navigate('/dashboard', { replace: true })
+    }
+
+    // ── Step forms ────────────────────────────────────────────────────────
     const form1 = useForm<Step1Data>({ resolver: zodResolver(step1Schema) })
     const onStep1 = async (data: Step1Data) => {
         setSaving(true)
@@ -170,7 +270,6 @@ export default function OnboardingPage() {
         setStep(2)
     }
 
-    // ── Step 2 ──────────────────────────────────────────────────────────────
     const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) })
     const onStep2 = async (data: Step2Data) => {
         setSaving(true)
@@ -183,7 +282,6 @@ export default function OnboardingPage() {
         setStep(3)
     }
 
-    // ── Step 3 ──────────────────────────────────────────────────────────────
     const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) })
     const onStep3 = async (data: Step3Data) => {
         setSaving(true)
@@ -199,12 +297,58 @@ export default function OnboardingPage() {
     }
     const skipStep3 = () => setStep(4)
 
+    // ── Payment waiting screen ─────────────────────────────────────────────
+    if (waitingForPayment) {
+        return (
+            <div className="min-h-screen bg-surface flex flex-col items-center justify-center py-12 px-4">
+                <div className="w-full max-w-md text-center space-y-6">
+                    <span className="font-extrabold text-brand text-2xl tracking-tight">Prezta</span>
+                    <div className="bg-white rounded-2xl border border-border shadow-sm p-10 space-y-5">
+                        <Loader2 className="h-10 w-10 animate-spin text-brand mx-auto" />
+                        <div>
+                            <h2 className="text-lg font-black text-text-primary">
+                                En attente de confirmation de paiement…
+                            </h2>
+                            <p className="text-sm text-text-secondary mt-2">
+                                Cette page se mettra à jour automatiquement après votre paiement.
+                            </p>
+                        </div>
+                        <p className="text-xs text-text-muted">
+                            Si vous avez déjà payé,{' '}
+                            <button
+                                onClick={() => void finishOnboarding(false)}
+                                className="text-brand underline font-medium"
+                            >
+                                actualisez ici
+                            </button>
+                            .
+                        </p>
+                        <Button
+                            variant="ghost"
+                            className="text-text-muted text-sm w-full"
+                            onClick={() => setWaitingForPayment(null)}
+                        >
+                            Annuler et revenir au choix de plan
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
     return (
         <div className="min-h-screen bg-surface flex flex-col items-center justify-center py-12 px-4">
             <div className="w-full max-w-lg">
-                {/* Brand */}
-                <div className="text-center mb-8">
+                {/* Brand + quit button */}
+                <div className="flex items-center justify-between mb-8">
                     <span className="font-extrabold text-brand text-2xl tracking-tight">Prezta</span>
+                    <button
+                        onClick={handleQuit}
+                        className="flex items-center gap-1.5 text-xs text-text-muted hover:text-text-secondary transition-colors"
+                    >
+                        <LogOut className="h-3.5 w-3.5" />
+                        Quitter
+                    </button>
                 </div>
 
                 <div className="bg-white rounded-2xl border border-border shadow-sm p-8">
@@ -272,7 +416,8 @@ export default function OnboardingPage() {
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Sélectionner votre statut…" />
                                             </SelectTrigger>
-                                            <SelectContent>
+                                            {/* FIX 2: opaque dropdown */}
+                                            <SelectContent className="bg-white z-[60]">
                                                 {LEGAL_STATUS_OPTIONS.map(opt => (
                                                     <SelectItem key={opt.value} value={opt.value}>
                                                         {opt.label}
@@ -289,9 +434,10 @@ export default function OnboardingPage() {
                                 error={form2.formState.errors.siret_number?.message}
                                 hint="14 chiffres — trouvez-le sur papiers.fr ou infogreffe.fr"
                             >
+                                {/* maxLength=20 allows spaces: "123 456 789 00012" */}
                                 <Input
-                                    placeholder="12345678901234"
-                                    maxLength={14}
+                                    placeholder="123 456 789 00012"
+                                    maxLength={20}
                                     {...form2.register('siret_number')}
                                 />
                             </Field>
@@ -350,9 +496,9 @@ export default function OnboardingPage() {
                             <Field
                                 label="IBAN (optionnel)"
                                 error={form3.formState.errors.iban?.message}
-                                hint="Affiché sur vos factures pour faciliter les paiements"
+                                hint="Affiché sur vos factures — les espaces sont automatiquement supprimés"
                             >
-                                <Input placeholder="FR76 …" {...form3.register('iban')} />
+                                <Input placeholder="FR76 3000 …" {...form3.register('iban')} />
                             </Field>
 
                             <div className="flex gap-3 pt-2">
@@ -381,7 +527,7 @@ export default function OnboardingPage() {
 
                     {/* ── Step 4: Choisir un plan ─────────────────────────── */}
                     {step === 4 && (
-                        <div className="space-y-6">
+                        <div className="space-y-4">
                             <div className="space-y-1 mb-6">
                                 <h1 className="text-xl font-black text-text-primary">Choisir un plan</h1>
                                 <p className="text-sm text-text-secondary">
@@ -393,7 +539,9 @@ export default function OnboardingPage() {
                             <div className="rounded-xl border-2 border-border p-5 space-y-3">
                                 <div>
                                     <p className="text-xs font-bold uppercase tracking-wider text-text-muted">Gratuit</p>
-                                    <p className="text-2xl font-black text-text-primary mt-1">0€ <span className="text-sm font-normal text-text-muted">/ 14 jours</span></p>
+                                    <p className="text-2xl font-black text-text-primary mt-1">
+                                        0€ <span className="text-sm font-normal text-text-muted">/ 14 jours</span>
+                                    </p>
                                 </div>
                                 <ul className="space-y-1.5 text-sm text-text-secondary">
                                     <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" />3 projets · 15 documents</li>
@@ -402,8 +550,10 @@ export default function OnboardingPage() {
                                 </ul>
                                 <Button
                                     className="w-full bg-text-primary text-white hover:bg-text-primary/90"
-                                    onClick={() => finishOnboarding()}
+                                    disabled={saving}
+                                    onClick={() => void finishOnboarding(true)}
                                 >
+                                    {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                                     Commencer l'essai gratuit
                                 </Button>
                             </div>
@@ -412,7 +562,9 @@ export default function OnboardingPage() {
                             <div className="rounded-xl border border-border p-5 space-y-3">
                                 <div>
                                     <p className="text-xs font-bold uppercase tracking-wider text-brand">Starter</p>
-                                    <p className="text-2xl font-black text-text-primary mt-1">9€ <span className="text-sm font-normal text-text-muted">/ mois</span></p>
+                                    <p className="text-2xl font-black text-text-primary mt-1">
+                                        9€ <span className="text-sm font-normal text-text-muted">/ mois</span>
+                                    </p>
                                 </div>
                                 <ul className="space-y-1.5 text-sm text-text-secondary">
                                     <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" />10 projets · 50 documents</li>
@@ -422,10 +574,7 @@ export default function OnboardingPage() {
                                 <Button
                                     variant="outline"
                                     className="w-full border-border"
-                                    onClick={() => {
-                                        window.open(LS_STARTER_MONTHLY, '_blank')
-                                        finishOnboarding()
-                                    }}
+                                    onClick={() => openPaidCheckout(LS_STARTER_MONTHLY, 'starter')}
                                 >
                                     Choisir Starter
                                 </Button>
@@ -441,7 +590,9 @@ export default function OnboardingPage() {
                                         <Sparkles className="h-3.5 w-3.5 text-brand" />
                                         <p className="text-xs font-bold uppercase tracking-wider text-brand">Pro</p>
                                     </div>
-                                    <p className="text-2xl font-black text-text-primary mt-1">19€ <span className="text-sm font-normal text-text-muted">/ mois</span></p>
+                                    <p className="text-2xl font-black text-text-primary mt-1">
+                                        19€ <span className="text-sm font-normal text-text-muted">/ mois</span>
+                                    </p>
                                 </div>
                                 <ul className="space-y-1.5 text-sm text-text-secondary">
                                     <li className="flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-500" />Projets & documents illimités</li>
@@ -450,10 +601,7 @@ export default function OnboardingPage() {
                                 </ul>
                                 <Button
                                     className="w-full bg-brand text-white hover:bg-brand-hover shadow-md shadow-blue-200"
-                                    onClick={() => {
-                                        window.open(LS_PRO_MONTHLY, '_blank')
-                                        finishOnboarding()
-                                    }}
+                                    onClick={() => openPaidCheckout(LS_PRO_MONTHLY, 'pro')}
                                 >
                                     Choisir Pro
                                 </Button>
