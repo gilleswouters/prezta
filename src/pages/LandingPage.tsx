@@ -226,7 +226,10 @@ export default function LandingPage() {
                                 <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Signatures supplémentaires 1€/unité</li>
                                 <li className="flex items-center gap-2 text-text-muted"><X className="h-4 w-4 shrink-0" />Fonctionnalités IA</li>
                             </ul>
-                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => setShowSignup(true)}>
+                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => {
+                                sessionStorage.setItem('pendingPlan', 'starter');
+                                setShowSignup(true);
+                            }}>
                                 Choisir Starter
                             </Button>
                         </div>
@@ -260,7 +263,10 @@ export default function LandingPage() {
                                 <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Alertes expiration · Tracking devis</li>
                                 <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Dashboard revenus · Support prioritaire</li>
                             </ul>
-                            <Button className="w-full bg-brand text-white hover:bg-brand-hover font-bold shadow-md shadow-blue-200" onClick={() => setShowSignup(true)}>
+                            <Button className="w-full bg-brand text-white hover:bg-brand-hover font-bold shadow-md shadow-blue-200" onClick={() => {
+                                sessionStorage.setItem('pendingPlan', 'pro');
+                                setShowSignup(true);
+                            }}>
                                 Choisir Pro
                             </Button>
                         </div>

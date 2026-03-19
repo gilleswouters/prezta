@@ -2,8 +2,10 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
 import * as z from 'zod';
 import { supabase } from '@/lib/supabase';
+import { openLemonSqueezyCheckout } from '@/lib/lemon';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -13,8 +15,18 @@ import { toast } from 'sonner';
 import { sendEmail } from '@/lib/resend';
 import { WelcomeEmailTemplate } from '@/components/emails/WelcomeEmail';
 
+// ─── Checkout URLs (monthly) ────────────────────────────────────────────────
+const LS_STARTER_MONTHLY = 'https://prezta.lemonsqueezy.com/checkout/buy/962125e4-80f2-4181-966e-f53763aae63d'
+const LS_PRO_MONTHLY     = 'https://prezta.lemonsqueezy.com/checkout/buy/912fdc98-0a1e-40de-95c8-ffde04fab2a1'
+
+const PLAN_URLS: Record<string, string> = {
+    starter: LS_STARTER_MONTHLY,
+    pro:     LS_PRO_MONTHLY,
+}
+
+// ─── Schema ──────────────────────────────────────────────────────────────────
 const signupSchema = z.object({
-    email: z.string().email({ message: 'Adresse email invalide' }),
+    email:    z.string().email({ message: 'Adresse email invalide' }),
     password: z.string().min(8, { message: 'Le mot de passe doit faire au moins 8 caractères' }),
 });
 
@@ -26,7 +38,8 @@ interface SignupModalProps {
 }
 
 export function SignupModal({ open, onClose }: SignupModalProps) {
-    const navigate = useNavigate();
+    const navigate     = useNavigate();
+    const queryClient  = useQueryClient();
     const [loading, setLoading] = useState(false);
 
     const { register, handleSubmit, formState: { errors }, reset } = useForm<SignupFormValues>({
@@ -39,8 +52,9 @@ export function SignupModal({ open, onClose }: SignupModalProps) {
 
     const onSubmit = async (data: SignupFormValues) => {
         setLoading(true);
-        const { error } = await supabase.auth.signUp({
-            email: data.email,
+
+        const { data: authData, error } = await supabase.auth.signUp({
+            email:    data.email,
             password: data.password,
         });
 
@@ -50,16 +64,39 @@ export function SignupModal({ open, onClose }: SignupModalProps) {
             return;
         }
 
+        // Fire welcome email (non-blocking)
         sendEmail({
-            to: data.email,
+            to:      data.email,
             subject: 'Bienvenue sur Prezta ! 🚀',
-            html: WelcomeEmailTemplate(data.email.split('@')[0]),
+            html:    WelcomeEmailTemplate(data.email.split('@')[0]),
         });
 
-        toast.success('Compte créé ! Bienvenue sur Prezta.');
+        const userId      = authData.user?.id;
+        const pendingPlan = sessionStorage.getItem('pendingPlan');
+        sessionStorage.removeItem('pendingPlan');
+
         reset();
+
+        // Close modal + navigate to dashboard first
         onClose();
-        navigate('/onboarding');
+        navigate('/dashboard');
+
+        // Open LS checkout overlay if a plan was pre-selected
+        if (pendingPlan && userId && PLAN_URLS[pendingPlan]) {
+            const planLabel = pendingPlan === 'pro' ? 'Pro' : 'Starter';
+
+            openLemonSqueezyCheckout({
+                url:    PLAN_URLS[pendingPlan],
+                userId,
+                onSuccess: async () => {
+                    toast.success(`🎉 Bienvenue sur le plan ${planLabel} !`);
+                    await queryClient.refetchQueries({ queryKey: ['subscription'] });
+                    navigate('/dashboard');
+                },
+            });
+        } else {
+            toast.success('Compte créé ! Bienvenue sur Prezta.');
+        }
     };
 
     return (

@@ -7,6 +7,7 @@ export const config = { runtime: 'edge' };
 interface LSAttributes {
     status: string;
     renews_at: string | null;
+    ends_at: string | null;
     variant_name?: string;
     product_name?: string;
 }
@@ -125,7 +126,11 @@ export default async function handler(req: Request): Promise<Response> {
 
             const { error } = await supabase
                 .from('subscriptions')
-                .update({ status: 'cancelled' })
+                .update({
+                    status: 'cancelled',
+                    // ends_at = last day of access; renews_at is null when cancelled
+                    current_period_end: attrs.ends_at ?? attrs.renews_at,
+                })
                 .eq('user_id', userId);
 
             if (error) throw error;

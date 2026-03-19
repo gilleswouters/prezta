@@ -27,7 +27,8 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle } from 'lucide-react';
+import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle, RefreshCw, Ban } from 'lucide-react';
+import { openLemonSqueezyCheckout } from '@/lib/lemon';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 
@@ -35,16 +36,16 @@ import { Switch } from '@/components/ui/switch';
 const LS_STARTER_MONTHLY = 'https://prezta.lemonsqueezy.com/checkout/buy/962125e4-80f2-4181-966e-f53763aae63d'
 const LS_PRO_MONTHLY     = 'https://prezta.lemonsqueezy.com/checkout/buy/912fdc98-0a1e-40de-95c8-ffde04fab2a1'
 const LS_CUSTOMER_PORTAL = 'https://app.lemonsqueezy.com/my-orders'
-const POLL_INTERVAL_MS   = 3_000
-const POLL_TIMEOUT_MS    = 15 * 60 * 1_000
+const POLL_INTERVAL_MS   = 2_000
+const POLL_TIMEOUT_MS    = 30 * 1_000
 
 // ─── Subscription card ──────────────────────────────────────────────────────
 
-function PlanBadge({ plan }: { plan: string }) {
+function PlanBadge({ plan, cancelled }: { plan: string; cancelled?: boolean }) {
     if (plan === 'pro')
-        return <span className="bg-brand-light text-brand text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Pro</span>
+        return <span className={`text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${cancelled ? 'bg-gray-100 text-gray-500 line-through' : 'bg-brand-light text-brand'}`}>Pro</span>
     if (plan === 'starter')
-        return <span className="bg-surface2 text-text-secondary text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Starter</span>
+        return <span className={`text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider ${cancelled ? 'bg-gray-100 text-gray-500 line-through' : 'bg-surface2 text-text-secondary'}`}>Starter</span>
     return <span className="bg-amber-100 text-amber-700 text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Essai gratuit</span>
 }
 
@@ -54,10 +55,14 @@ function SubscriptionSection() {
     const queryClient = useQueryClient()
     const { data: subscription } = useSubscription()
 
-    const plan      = subscription?.plan ?? 'trial'
-    const isPro     = plan === 'pro'
-    const isStarter = plan === 'starter'
-    const isTrial   = plan === 'trial'
+    const plan        = subscription?.plan ?? 'trial'
+    const subStatus   = subscription?.status ?? null          // 'active' | 'cancelled' | null
+    const isCancelled = subStatus === 'cancelled'
+    const isActive    = subStatus === 'active'
+    const isPro       = plan === 'pro'
+    const isStarter   = plan === 'starter'
+    const isTrial     = plan === 'trial'
+    const isPaid      = isStarter || isPro                    // has a subscription row
 
     const [checkoutPending, setCheckoutPending] = useState<'starter' | 'pro' | null>(null)
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -70,22 +75,23 @@ function SubscriptionSection() {
         : PLANS.trial.trialDays
     const trialProgress = Math.round(((PLANS.trial.trialDays - trialDaysRemaining) / PLANS.trial.trialDays) * 100)
 
-    const renewalDate = subscription?.currentPeriodEnd
-        ? new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR', {
-              day: 'numeric', month: 'long', year: 'numeric',
-          })
-        : null
+    // Format date in French
+    const formatFR = (iso: string) =>
+        new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 
-    // Detect plan upgrade while polling
+    const periodEndDate = subscription?.currentPeriodEnd ? formatFR(subscription.currentPeriodEnd) : null
+
+    // Poll for plan upgrade while checkout is open
     useEffect(() => {
         if (!checkoutPending) return
-        const upgraded = (checkoutPending === 'starter' && isStarter) || (checkoutPending === 'pro' && isPro)
+        const upgraded = (checkoutPending === 'starter' && isStarter && isActive) ||
+                         (checkoutPending === 'pro'     && isPro     && isActive)
         if (upgraded) {
             stopPolling()
             toast.success(`🎉 Bienvenue sur le plan ${checkoutPending === 'pro' ? 'Pro' : 'Starter'} !`)
             navigate('/dashboard')
         }
-    }, [plan, checkoutPending]) // eslint-disable-line react-hooks/exhaustive-deps
+    }, [plan, subStatus, checkoutPending]) // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => () => stopPolling(), []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -105,24 +111,19 @@ function SubscriptionSection() {
         setCheckoutPending(null)
     }
 
-    function openCheckout(url: string, target: 'starter' | 'pro') {
-        if (typeof window.createLemonSqueezy === 'function') {
-            window.createLemonSqueezy()
-            window.LemonSqueezy?.Setup({
-                eventHandler: (event) => {
-                    if (event.event === 'Checkout.Success') {
-                        window.LemonSqueezy?.Url.Close()
-                        stopPolling()
-                        toast.success(`🎉 Bienvenue sur le plan ${target === 'pro' ? 'Pro' : 'Starter'} !`)
-                        void queryClient.refetchQueries({ queryKey: ['subscription'] })
-                        navigate('/dashboard')
-                    }
-                },
-            })
-            window.LemonSqueezy?.Url.Open(`${url}?embed=1`)
-        } else {
-            window.open(url, '_blank')
-        }
+    function handleCheckout(url: string, target: 'starter' | 'pro') {
+        if (!user?.id) return
+        const planLabel = target === 'pro' ? 'Pro' : 'Starter'
+        openLemonSqueezyCheckout({
+            url,
+            userId: user.id,
+            onSuccess: async () => {
+                stopPolling()
+                toast.success(`🎉 Bienvenue sur le plan ${planLabel} !`)
+                await queryClient.refetchQueries({ queryKey: ['subscription'] })
+                navigate('/dashboard')
+            },
+        })
         startPolling(target)
     }
 
@@ -133,10 +134,12 @@ function SubscriptionSection() {
                 <div className="space-y-2">
                     <h2 className="text-base font-bold text-text-primary">Abonnement</h2>
                     <div className="flex flex-wrap items-center gap-2">
-                        <PlanBadge plan={plan} />
+                        <PlanBadge plan={plan} cancelled={isCancelled} />
+
+                        {/* Trial status */}
                         {isTrial && trialDaysRemaining > 0 && (
                             <span className="text-sm text-amber-700 font-medium">
-                                Essai · expire dans <strong>{trialDaysRemaining} jour{trialDaysRemaining !== 1 ? 's' : ''}</strong>
+                                Essai gratuit · expire dans <strong>{trialDaysRemaining} jour{trialDaysRemaining !== 1 ? 's' : ''}</strong>
                             </span>
                         )}
                         {isTrial && trialDaysRemaining === 0 && (
@@ -145,16 +148,26 @@ function SubscriptionSection() {
                                 Essai expiré
                             </span>
                         )}
-                        {!isTrial && (
-                            <span className="text-sm text-text-secondary flex items-center gap-1">
-                                <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
-                                Actif{renewalDate && <> · Renouvellement le <strong>{renewalDate}</strong></>}
+
+                        {/* Active paid */}
+                        {isPaid && isActive && (
+                            <span className="text-sm text-text-secondary flex items-center gap-1.5">
+                                <RefreshCw className="h-3 w-3 text-emerald-500 shrink-0" />
+                                Renouvellement automatique{periodEndDate && <> · <strong>{periodEndDate}</strong></>}
+                            </span>
+                        )}
+
+                        {/* Cancelled but still has access */}
+                        {isPaid && isCancelled && (
+                            <span className="text-sm text-orange-600 font-medium flex items-center gap-1.5">
+                                <Ban className="h-3.5 w-3.5 shrink-0" />
+                                Annulé · Accès jusqu'au{periodEndDate && <strong> {periodEndDate}</strong>}
                             </span>
                         )}
                     </div>
                 </div>
 
-                {!isTrial && (
+                {isPaid && (
                     <Button asChild variant="outline" size="sm" className="shrink-0 text-xs border-border">
                         <a href={LS_CUSTOMER_PORTAL} target="_blank" rel="noopener noreferrer">
                             <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
@@ -178,7 +191,7 @@ function SubscriptionSection() {
             )}
 
             {/* Firma usage for paid plans */}
-            {(isStarter || isPro) && (
+            {isPaid && isActive && (
                 <div className="pt-3 border-t border-border/60 text-sm text-text-secondary">
                     Signatures FIRMA utilisées ce mois :{' '}
                     <strong className="text-text-primary">{subscription?.firmaUsed ?? 0}</strong>
@@ -197,8 +210,8 @@ function SubscriptionSection() {
                 </div>
             )}
 
-            {/* Upgrade options */}
-            {!isPro && !checkoutPending && (
+            {/* Upgrade options — shown for trial, starter (active), or cancelled subs */}
+            {!(isPro && isActive) && !checkoutPending && (
                 <div className={`pt-3 border-t border-border/60 grid gap-3 ${isTrial ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                     {isTrial && (
                         <div className="rounded-xl border border-border p-4 flex flex-col gap-2">
@@ -210,7 +223,7 @@ function SubscriptionSection() {
                             <Button
                                 size="sm"
                                 className="w-full bg-text-primary text-white hover:bg-text-primary/90 mt-1"
-                                onClick={() => openCheckout(LS_STARTER_MONTHLY, 'starter')}
+                                onClick={() => handleCheckout(LS_STARTER_MONTHLY, 'starter')}
                             >
                                 Choisir Starter
                             </Button>
@@ -233,7 +246,7 @@ function SubscriptionSection() {
                         <Button
                             size="sm"
                             className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1"
-                            onClick={() => openCheckout(LS_PRO_MONTHLY, 'pro')}
+                            onClick={() => handleCheckout(LS_PRO_MONTHLY, 'pro')}
                         >
                             Passer au Pro
                         </Button>
