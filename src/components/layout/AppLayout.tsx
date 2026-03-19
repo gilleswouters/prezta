@@ -138,11 +138,11 @@ export default function AppLayout() {
                 <StorageBar compact />
 
                 {/* Upgrade CTA — Trial / Starter only */}
-                {(isTrial || (subscription?.plan === 'starter')) && (
+                {(isTrial || subscription?.plan === 'starter') && (
                     <div className="px-4 pb-2">
                         <Button
                             className="w-full text-white text-xs font-bold h-9 bg-gradient-to-r from-[var(--brand)] to-purple-600 hover:opacity-90 border-none shadow-sm"
-                            onClick={() => navigate('/parametres/abonnement')}
+                            onClick={() => navigate('/profil')}
                         >
                             <Sparkles className="h-3.5 w-3.5 mr-2 shrink-0" />
                             {subscription?.plan === 'starter' ? '✦ Passer au Pro' : 'Choisir un plan'}
@@ -202,14 +202,14 @@ export default function AppLayout() {
                     </div>
                 </header>
 
-                {/* Trial countdown banner */}
+                {/* Trial countdown banner — hidden for paid plans */}
                 {showTrialBanner && (
                     trialDaysRemaining > 0 ? (
                         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm font-medium shrink-0">
                             <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
                             Votre essai gratuit expire dans{' '}
                             <strong>{trialDaysRemaining} jour{trialDaysRemaining > 1 ? 's' : ''}</strong>.{' '}
-                            <Link to="/parametres/abonnement" className="underline font-bold hover:text-amber-900">
+                            <Link to="/profil" className="underline font-bold hover:text-amber-900">
                                 Choisir un plan →
                             </Link>
                         </div>
@@ -217,7 +217,7 @@ export default function AppLayout() {
                         <div className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200 text-red-800 text-sm font-medium shrink-0">
                             <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
                             Votre essai gratuit a expiré.{' '}
-                            <Link to="/parametres/abonnement" className="underline font-bold hover:text-red-900">
+                            <Link to="/profil" className="underline font-bold hover:text-red-900">
                                 Choisissez un plan pour continuer →
                             </Link>
                         </div>

@@ -95,7 +95,9 @@ export default async function handler(req: Request): Promise<Response> {
 
         if (eventName === 'subscription_created' || eventName === 'subscription_updated') {
             if (!userId) {
-                console.error('[LS Webhook] Missing user_id in meta.custom_data for', eventName);
+                // Log full payload so missing user_id can be diagnosed in Vercel logs
+                console.error('[LS Webhook] Missing user_id in meta.custom_data for', eventName,
+                    '— full payload:', JSON.stringify(payload));
                 return new Response('OK', { status: 200 });
             }
 
@@ -105,16 +107,22 @@ export default async function handler(req: Request): Promise<Response> {
             ).toLowerCase();
             const plan: 'starter' | 'pro' = nameToCheck.includes('starter') ? 'starter' : 'pro';
 
+            // On creation we force 'active' — Prezta manages its own trial period and
+            // does not configure LS trial periods, so the LS status is always 'active'
+            // for a newly paid subscription. On update, use the real LS status.
+            const status = eventName === 'subscription_created' ? 'active' : attrs.status;
+
             const { error } = await supabase.from('subscriptions').upsert({
                 user_id:             userId,
                 plan,
-                status:              attrs.status,
+                status,
                 lemon_squeezy_id:    payload.data.id,
                 current_period_end:  attrs.renews_at,
+                updated_at:          new Date().toISOString(),
             }, { onConflict: 'user_id' });
 
             if (error) throw error;
-            console.log(`[LS Webhook] ${eventName} — user ${userId} → ${plan}`);
+            console.log(`[LS Webhook] ${eventName} — user ${userId} → plan=${plan} status=${status}`);
 
         // ── subscription_cancelled ────────────────────────────────────────────
 
