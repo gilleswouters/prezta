@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
+import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
 import { ProjectDashboardModal } from '@/components/projects/ProjectDashboardModal';
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal';
@@ -15,6 +16,8 @@ import {
     Clock,
     ArrowRight,
     CheckCircle2,
+    X,
+    UserCircle,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
@@ -25,11 +28,13 @@ export default function DashboardPage() {
     const navigate = useNavigate();
     const { data, isLoading } = useDashboard();
     const { data: allProjects } = useProjects();
+    const { data: profile, isLoading: profileLoading } = useProfile();
 
     const [dashboardModalOpen, setDashboardModalOpen] = useState(false);
     const [selectedProject, setSelectedProject] = useState<ProjectWithClient | null>(null);
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [contractsModalOpen, setContractsModalOpen] = useState(false);
+    const [profileBannerDismissed, setProfileBannerDismissed] = useState(false);
 
     const openProjectModal = (projectId: string) => {
         const found = allProjects?.find(p => p.id === projectId) ?? null;
@@ -39,7 +44,17 @@ export default function DashboardPage() {
         }
     };
 
-    const firstName = user?.email?.split('@')[0] || 'Freelance';
+    // First name: full_name first word → email prefix → fallback
+    const firstName =
+        profile?.full_name?.trim().split(' ')[0] ||
+        user?.email?.split('@')[0] ||
+        'Freelance';
+
+    // Show profile nudge when profile is loaded but incomplete
+    const showProfileNudge =
+        !profileLoading &&
+        !profileBannerDismissed &&
+        (!profile?.full_name || !profile?.legal_status);
 
     if (isLoading || !data) {
         return (
@@ -155,6 +170,29 @@ export default function DashboardPage() {
                     Voici votre résumé d'activité pour {format(new Date(), 'MMMM yyyy', { locale: fr })}.
                 </p>
             </div>
+
+            {/* Profile completion nudge */}
+            {showProfileNudge && (
+                <div className="flex items-center gap-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
+                    <UserCircle className="h-4 w-4 shrink-0 text-amber-500" />
+                    <span className="flex-1">
+                        Complétez votre profil pour accéder à toutes les fonctionnalités.{' '}
+                        <button
+                            onClick={() => navigate('/profil')}
+                            className="font-bold underline hover:text-amber-900"
+                        >
+                            Compléter mon profil →
+                        </button>
+                    </span>
+                    <button
+                        onClick={() => setProfileBannerDismissed(true)}
+                        className="shrink-0 p-0.5 hover:bg-amber-100 rounded"
+                        aria-label="Fermer"
+                    >
+                        <X className="h-3.5 w-3.5" />
+                    </button>
+                </div>
+            )}
 
             {/* KPI Grid — 4 operational cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">

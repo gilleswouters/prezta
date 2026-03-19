@@ -1,8 +1,9 @@
 import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, Clock, FileText, Mail, CalendarDays, BarChart2, FileArchive, AlertTriangle, Timer, CreditCard } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, Clock, FileText, Mail, CalendarDays, BarChart2, FileArchive, AlertTriangle, Timer } from 'lucide-react';
 import { ActiveTimerWidget } from '@/components/time/ActiveTimerWidget';
 import { StorageBar } from '@/components/ui/StorageBar';
 import { ChatAssistant } from '@/components/ai/ChatAssistant';
@@ -13,9 +14,16 @@ import { useUIStore } from '@/stores/uiStore';
 export default function AppLayout() {
     const { user, signOut } = useAuth();
     const { data: subscription } = useSubscription();
+    const { data: profile } = useProfile();
     const navigate = useNavigate();
     const location = useLocation();
     const { isChatOpen, openChat, closeChat } = useUIStore();
+
+    // Display name: first word of full_name → email prefix
+    const displayName =
+        profile?.full_name?.trim().split(' ')[0] ||
+        user?.email?.split('@')[0] ||
+        'Utilisateur';
 
     // Trial banner calculation
     const isTrial = !subscription?.plan || subscription.plan === 'trial';
@@ -41,7 +49,6 @@ export default function AppLayout() {
         if (pathname.includes('/registre')) return 'Registre';
         if (pathname.includes('/profil')) return 'Profil';
         if (pathname.includes('/parametres/emails')) return 'Modèles d\'e-mails';
-        if (pathname.includes('/parametres/abonnement')) return 'Abonnement';
         return 'Prezta';
     };
 
@@ -77,7 +84,6 @@ export default function AppLayout() {
             items: [
                 { label: 'Profil', path: '/profil', icon: <User className="h-4 w-4" /> },
                 { label: 'E-mails', path: '/parametres/emails', icon: <Mail className="h-4 w-4" /> },
-                { label: 'Abonnement', path: '/parametres/abonnement', icon: <CreditCard className="h-4 w-4" /> },
             ]
         }
     ];
@@ -148,7 +154,7 @@ export default function AppLayout() {
                 <div className="p-4 border-t border-[var(--sidebar-border)] w-full flex items-center justify-between gap-3 shrink-0">
                     <div className="flex-1 flex flex-col overflow-hidden leading-tight">
                         <span className="font-semibold text-[13px] text-[var(--text-primary)] truncate">
-                            {user?.email?.split('@')[0] || 'Utilisateur'}
+                            {displayName}
                         </span>
                         <div className="flex items-center gap-1.5 overflow-hidden">
                             <span className="text-[10px] font-medium text-[var(--text-muted)] truncate">

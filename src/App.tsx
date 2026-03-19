@@ -81,7 +81,7 @@ function App() {
                 <Route path="/projets/nouveau" element={<ProjectWizard />} />
                 <Route path="/projets/:id/devis" element={<QuoteBuilderPage />} />
                 <Route path="/parametres/emails" element={<ParametresEmailsPage />} />
-                <Route path="/parametres/abonnement" element={<SubscriptionPage />} />
+                <Route path="/parametres/abonnement" element={<Navigate to="/profil#abonnement" replace />} />
                 <Route path="/planning" element={<PlanningPage />} />
                 <Route path="/calculateur" element={<Navigate to="/catalogue?tab=calculateur" replace />} />
                 <Route path="/revenus" element={<RevenueDashboardPage />} />

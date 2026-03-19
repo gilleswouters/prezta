@@ -27,6 +27,6 @@ export function useSubscription() {
             return { plan, isPro, firmaUsed, currentPeriodEnd };
         },
         enabled: !!session?.user.id,
-        staleTime: 1000 * 60 * 5, // Cache 5 minutes
+        staleTime: 30 * 1000, // 30 seconds — fast refresh after LS payment webhook
     });
 }

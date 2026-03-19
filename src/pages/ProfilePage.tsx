@@ -1,14 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { useProfile, useUpdateProfile, useUploadLogo, StorageLimitError } from '@/hooks/useProfile';
+import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
+import { PLANS } from '@/lib/plans';
 import { profileSchema } from '@/lib/validations/profile';
 import type { ProfileFormValues } from '@/lib/validations/profile';
 import { Country, LegalStatus } from '@/types/profile';
 import { StorageBar } from '@/components/ui/StorageBar';
 import { StorageLimitModal } from '@/components/ui/StorageLimitModal';
 import { useStorageUsage } from '@/hooks/useStorageUsage';
-import { toast } from 'sonner';
 
 import {
     Form,
@@ -22,9 +27,259 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
+
+// ─── Lemon Squeezy ─────────────────────────────────────────────────────────
+const LS_STARTER_MONTHLY = 'https://prezta.lemonsqueezy.com/checkout/buy/962125e4-80f2-4181-966e-f53763aae63d'
+const LS_PRO_MONTHLY     = 'https://prezta.lemonsqueezy.com/checkout/buy/912fdc98-0a1e-40de-95c8-ffde04fab2a1'
+const LS_CUSTOMER_PORTAL = 'https://app.lemonsqueezy.com/my-orders'
+const POLL_INTERVAL_MS   = 3_000
+const POLL_TIMEOUT_MS    = 15 * 60 * 1_000
+
+// ─── Subscription card ──────────────────────────────────────────────────────
+
+function PlanBadge({ plan }: { plan: string }) {
+    if (plan === 'pro')
+        return <span className="bg-brand-light text-brand text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Pro</span>
+    if (plan === 'starter')
+        return <span className="bg-surface2 text-text-secondary text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Starter</span>
+    return <span className="bg-amber-100 text-amber-700 text-xs font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Essai gratuit</span>
+}
+
+function SubscriptionSection() {
+    const { user } = useAuth()
+    const navigate  = useNavigate()
+    const queryClient = useQueryClient()
+    const { data: subscription } = useSubscription()
+
+    const plan      = subscription?.plan ?? 'trial'
+    const isPro     = plan === 'pro'
+    const isStarter = plan === 'starter'
+    const isTrial   = plan === 'trial'
+
+    const [checkoutPending, setCheckoutPending] = useState<'starter' | 'pro' | null>(null)
+    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
+    const pollTimeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    const trialDaysRemaining = user?.created_at
+        ? Math.max(0, PLANS.trial.trialDays - Math.floor(
+            (Date.now() - new Date(user.created_at).getTime()) / 86_400_000
+          ))
+        : PLANS.trial.trialDays
+    const trialProgress = Math.round(((PLANS.trial.trialDays - trialDaysRemaining) / PLANS.trial.trialDays) * 100)
+
+    const renewalDate = subscription?.currentPeriodEnd
+        ? new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR', {
+              day: 'numeric', month: 'long', year: 'numeric',
+          })
+        : null
+
+    // Detect plan upgrade while polling
+    useEffect(() => {
+        if (!checkoutPending) return
+        const upgraded = (checkoutPending === 'starter' && isStarter) || (checkoutPending === 'pro' && isPro)
+        if (upgraded) {
+            stopPolling()
+            toast.success(`🎉 Bienvenue sur le plan ${checkoutPending === 'pro' ? 'Pro' : 'Starter'} !`)
+            navigate('/dashboard')
+        }
+    }, [plan, checkoutPending]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    useEffect(() => () => stopPolling(), []) // eslint-disable-line react-hooks/exhaustive-deps
+
+    function startPolling(target: 'starter' | 'pro') {
+        setCheckoutPending(target)
+        pollIntervalRef.current = setInterval(async () => {
+            await queryClient.refetchQueries({ queryKey: ['subscription'] })
+        }, POLL_INTERVAL_MS)
+        pollTimeoutRef.current = setTimeout(stopPolling, POLL_TIMEOUT_MS)
+    }
+
+    function stopPolling() {
+        if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
+        if (pollTimeoutRef.current)  clearTimeout(pollTimeoutRef.current)
+        pollIntervalRef.current = null
+        pollTimeoutRef.current  = null
+        setCheckoutPending(null)
+    }
+
+    function openCheckout(url: string, target: 'starter' | 'pro') {
+        if (typeof window.createLemonSqueezy === 'function') {
+            window.createLemonSqueezy()
+            window.LemonSqueezy?.Setup({
+                eventHandler: (event) => {
+                    if (event.event === 'Checkout.Success') {
+                        window.LemonSqueezy?.Url.Close()
+                        stopPolling()
+                        toast.success(`🎉 Bienvenue sur le plan ${target === 'pro' ? 'Pro' : 'Starter'} !`)
+                        void queryClient.refetchQueries({ queryKey: ['subscription'] })
+                        navigate('/dashboard')
+                    }
+                },
+            })
+            window.LemonSqueezy?.Url.Open(`${url}?embed=1`)
+        } else {
+            window.open(url, '_blank')
+        }
+        startPolling(target)
+    }
+
+    return (
+        <div id="abonnement" className="bg-white rounded-2xl border border-border p-6 space-y-4">
+            {/* Header */}
+            <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                    <h2 className="text-base font-bold text-text-primary">Abonnement</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                        <PlanBadge plan={plan} />
+                        {isTrial && trialDaysRemaining > 0 && (
+                            <span className="text-sm text-amber-700 font-medium">
+                                Essai · expire dans <strong>{trialDaysRemaining} jour{trialDaysRemaining !== 1 ? 's' : ''}</strong>
+                            </span>
+                        )}
+                        {isTrial && trialDaysRemaining === 0 && (
+                            <span className="text-sm text-red-600 font-medium flex items-center gap-1">
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                Essai expiré
+                            </span>
+                        )}
+                        {!isTrial && (
+                            <span className="text-sm text-text-secondary flex items-center gap-1">
+                                <span className="h-2 w-2 rounded-full bg-emerald-500 inline-block" />
+                                Actif{renewalDate && <> · Renouvellement le <strong>{renewalDate}</strong></>}
+                            </span>
+                        )}
+                    </div>
+                </div>
+
+                {!isTrial && (
+                    <Button asChild variant="outline" size="sm" className="shrink-0 text-xs border-border">
+                        <a href={LS_CUSTOMER_PORTAL} target="_blank" rel="noopener noreferrer">
+                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                            Gérer mon abonnement
+                        </a>
+                    </Button>
+                )}
+            </div>
+
+            {/* Trial progress bar */}
+            {isTrial && (
+                <div className="space-y-1.5">
+                    <div className="flex justify-between text-xs text-text-muted">
+                        <span>Jour {PLANS.trial.trialDays - trialDaysRemaining} / {PLANS.trial.trialDays}</span>
+                        <span>{trialDaysRemaining} jour{trialDaysRemaining !== 1 ? 's' : ''} restant{trialDaysRemaining !== 1 ? 's' : ''}</span>
+                    </div>
+                    <div className="h-2 w-full bg-surface2 rounded-full overflow-hidden">
+                        <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${trialProgress}%` }} />
+                    </div>
+                </div>
+            )}
+
+            {/* Firma usage for paid plans */}
+            {(isStarter || isPro) && (
+                <div className="pt-3 border-t border-border/60 text-sm text-text-secondary">
+                    Signatures FIRMA utilisées ce mois :{' '}
+                    <strong className="text-text-primary">{subscription?.firmaUsed ?? 0}</strong>
+                    {isStarter && ' / 3'}
+                </div>
+            )}
+
+            {/* Checkout pending indicator */}
+            {checkoutPending && (
+                <div className="flex items-center gap-2 text-sm text-brand bg-brand-light rounded-lg px-3 py-2">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                    En attente de confirmation de paiement…
+                    <button onClick={stopPolling} className="ml-auto text-text-muted hover:text-text-primary text-xs underline">
+                        Annuler
+                    </button>
+                </div>
+            )}
+
+            {/* Upgrade options */}
+            {!isPro && !checkoutPending && (
+                <div className={`pt-3 border-t border-border/60 grid gap-3 ${isTrial ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                    {isTrial && (
+                        <div className="rounded-xl border border-border p-4 flex flex-col gap-2">
+                            <p className="text-xs font-bold uppercase tracking-wider text-brand">Starter — 9€/mois</p>
+                            <ul className="space-y-1 text-xs text-text-secondary flex-1">
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />10 projets · 50 documents</li>
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />3 signatures FIRMA/mois</li>
+                            </ul>
+                            <Button
+                                size="sm"
+                                className="w-full bg-text-primary text-white hover:bg-text-primary/90 mt-1"
+                                onClick={() => openCheckout(LS_STARTER_MONTHLY, 'starter')}
+                            >
+                                Choisir Starter
+                            </Button>
+                        </div>
+                    )}
+                    <div className="rounded-xl border-2 border-brand p-4 flex flex-col gap-2 relative overflow-hidden">
+                        {!isStarter && (
+                            <div className="absolute top-0 right-0 bg-brand text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">
+                                Recommandé
+                            </div>
+                        )}
+                        <div className="flex items-center gap-1">
+                            <Sparkles className="h-3 w-3 text-brand" />
+                            <p className="text-xs font-bold uppercase tracking-wider text-brand">Pro — 19€/mois</p>
+                        </div>
+                        <ul className="space-y-1 text-xs text-text-secondary flex-1">
+                            <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Illimité · FIRMA illimité</li>
+                            <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-brand shrink-0" /><span className="font-semibold text-text-primary">IA complète</span></li>
+                        </ul>
+                        <Button
+                            size="sm"
+                            className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1"
+                            onClick={() => openCheckout(LS_PRO_MONTHLY, 'pro')}
+                        >
+                            Passer au Pro
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ─── Profile skeleton ────────────────────────────────────────────────────────
+
+function ProfileSkeleton() {
+    return (
+        <div className="max-w-3xl mx-auto py-10 px-4 space-y-6 animate-pulse">
+            {/* Subscription skeleton */}
+            <div className="bg-white rounded-2xl border border-border p-6 space-y-4">
+                <div className="h-4 w-24 bg-gray-200 rounded" />
+                <div className="h-6 w-40 bg-gray-100 rounded-full" />
+                <div className="h-2 w-full bg-gray-100 rounded-full" />
+            </div>
+            {/* Storage skeleton */}
+            <div className="bg-white border border-border rounded-xl p-5">
+                <div className="h-4 w-48 bg-gray-200 rounded mb-3" />
+                <div className="h-2 w-full bg-gray-100 rounded-full" />
+            </div>
+            {/* Form skeleton */}
+            <div className="bg-white border border-border rounded-2xl p-6 space-y-6">
+                <div className="h-6 w-56 bg-gray-200 rounded" />
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="h-10 bg-gray-100 rounded-lg" />
+                    <div className="h-10 bg-gray-100 rounded-lg" />
+                </div>
+                <div className="h-10 bg-gray-100 rounded-lg" />
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="h-10 bg-gray-100 rounded-lg" />
+                    <div className="h-10 bg-gray-100 rounded-lg" />
+                </div>
+                <div className="h-10 bg-gray-100 rounded-lg" />
+                <div className="h-10 bg-gray-100 rounded-lg" />
+            </div>
+        </div>
+    )
+}
+
+// ─── Main page ───────────────────────────────────────────────────────────────
 
 export default function ProfilePage() {
     const { data: profile, isLoading } = useProfile();
@@ -40,7 +295,7 @@ export default function ProfilePage() {
             full_name: '',
             phone: '',
             company_name: '',
-            country: Country.FR, // TODO: add BE/CH when ready
+            country: Country.FR,
             legal_status: LegalStatus.AUTO_ENTREPRENEUR_FR,
             bce_number: '',
             siret_number: '',
@@ -63,7 +318,7 @@ export default function ProfilePage() {
                 full_name: profile.full_name || '',
                 phone: profile.phone || '',
                 company_name: profile.company_name || '',
-                country: Country.FR, // TODO: add BE/CH when ready
+                country: Country.FR,
                 legal_status: profile.legal_status || LegalStatus.AUTO_ENTREPRENEUR_FR,
                 bce_number: profile.bce_number || '',
                 siret_number: profile.siret_number || '',
@@ -87,7 +342,6 @@ export default function ProfilePage() {
                 return;
             }
             setLogoFile(file);
-            // Create a temporary object URL for preview
             setValue('logo_url', URL.createObjectURL(file));
         }
     };
@@ -98,27 +352,18 @@ export default function ProfilePage() {
             if (logoFile) {
                 finalLogoUrl = await uploadLogo.mutateAsync(logoFile);
             }
-
-            await updateProfile.mutateAsync({
-                ...data,
-                logo_url: finalLogoUrl
-            });
+            await updateProfile.mutateAsync({ ...data, logo_url: finalLogoUrl });
         } catch (error) {
             if (error instanceof StorageLimitError) {
                 setStorageLimitOpen(true);
                 return;
             }
             console.error(error);
-            // Toast already handled by mutation
         }
     };
 
     if (isLoading) {
-        return (
-            <div className="flex justify-center items-center py-20">
-                <Loader2 className="h-8 w-8 animate-spin text-text-muted" />
-            </div>
-        );
+        return <ProfileSkeleton />;
     }
 
     return (
@@ -129,6 +374,9 @@ export default function ProfilePage() {
                 used={used}
                 limit={limit}
             />
+
+            {/* Subscription section */}
+            <SubscriptionSection />
 
             {/* Storage Usage */}
             <div className="bg-white border border-border rounded-xl p-5">
@@ -153,7 +401,6 @@ export default function ProfilePage() {
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="full_name" render={({ field }) => (
-                                        // We removed the Item component requirement since shadcn v4 uses FormItem instead
                                         <div className="space-y-2">
                                             <FormLabel className="text-text">Nom complet *</FormLabel>
                                             <FormControl>
@@ -182,7 +429,6 @@ export default function ProfilePage() {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="country" render={({ field }) => (
                                         <div className="space-y-2">
-                                            {/* TODO: add BE/CH when ready */}
                                             <FormLabel className="text-text">Pays</FormLabel>
                                             <input type="hidden" {...field} value={Country.FR} />
                                             <div className="h-10 px-3 py-2 bg-surface2 border border-border rounded-md text-sm flex items-center gap-2 text-text-muted select-none">
@@ -237,7 +483,6 @@ export default function ProfilePage() {
                                         </div>
                                     )} />
 
-
                                     <FormField control={form.control} name="legal_representative_role" render={({ field }) => (
                                         <div className="space-y-2">
                                             <FormLabel className="text-text">Fonction du représentant</FormLabel>
@@ -250,7 +495,6 @@ export default function ProfilePage() {
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {/* France only — TODO: add BE/CH when ready */}
                                     <FormField control={form.control} name="siret_number" render={({ field }) => (
                                         <div className="space-y-2">
                                             <FormLabel className="text-text">Numéro SIRET *</FormLabel>
@@ -319,7 +563,6 @@ export default function ProfilePage() {
                                         <FormMessage />
                                     </div>
                                 )} />
-
                             </div>
 
                             {/* === LOGO === */}
