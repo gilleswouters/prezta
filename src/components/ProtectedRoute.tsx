@@ -12,7 +12,7 @@ export const ProtectedRoute = () => {
         queryFn: async () => {
             const { data } = await supabase
                 .from('profiles')
-                .select('legal_status')
+                .select('onboarding_completed')
                 .eq('id', session!.user.id)
                 .maybeSingle()
             return data
@@ -35,7 +35,8 @@ export const ProtectedRoute = () => {
         return <Navigate to="/login" replace />
     }
 
-    const needsOnboarding = !profileCheck?.legal_status
+    // Only redirect when profile is loaded AND flag is strictly false (not null/undefined)
+    const needsOnboarding = profileCheck?.onboarding_completed === false
     if (needsOnboarding && location.pathname !== '/onboarding') {
         return <Navigate to="/onboarding" replace />
     }

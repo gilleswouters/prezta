@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import * as z from 'zod'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/hooks/useAuth'
@@ -126,15 +126,39 @@ export default function OnboardingPage() {
     const [step, setStep] = useState(1)
     const [saving, setSaving] = useState(false)
 
+    // Safety exit: if already completed, go straight to dashboard
+    const { data: profileData } = useQuery({
+        queryKey: ['profile-onboarding', user?.id],
+        queryFn: async () => {
+            if (!user?.id) return null
+            const { data } = await supabase
+                .from('profiles')
+                .select('onboarding_completed')
+                .eq('id', user.id)
+                .maybeSingle()
+            return data
+        },
+        enabled: !!user?.id,
+        staleTime: 0,
+    })
+
+    useEffect(() => {
+        if (profileData?.onboarding_completed === true) {
+            navigate('/dashboard', { replace: true })
+        }
+    }, [profileData, navigate])
+
     const saveToProfile = async (updates: Record<string, unknown>) => {
         if (!user?.id) return
         await supabase.from('profiles').update(updates).eq('id', user.id)
     }
 
     const finishOnboarding = async (extraUpdates?: Record<string, unknown>) => {
-        if (extraUpdates) await saveToProfile(extraUpdates)
-        await queryClient.invalidateQueries({ queryKey: ['profile-onboarding', user?.id] })
-        navigate('/dashboard')
+        // Always persist completion flag — this is the source of truth for ProtectedRoute
+        await saveToProfile({ ...extraUpdates, onboarding_completed: true })
+        // Refetch (not just invalidate) so the cache is fresh before we navigate
+        await queryClient.refetchQueries({ queryKey: ['profile-onboarding', user?.id] })
+        navigate('/dashboard', { replace: true })
     }
 
     // ── Step 1 ──────────────────────────────────────────────────────────────

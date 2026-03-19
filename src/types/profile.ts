@@ -43,6 +43,8 @@ export interface Profile {
     // Seasonality alerts (migration 00028)
     seasonality_enabled: boolean;
     last_seasonality_alert_sent_at: string | null;
+    // Onboarding completion flag (migration 00034)
+    onboarding_completed: boolean;
 }
 
 // Omit database generated fields for the form mapping
