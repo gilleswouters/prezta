@@ -34,10 +34,6 @@ function luhn(value: string): boolean {
     return sum % 10 === 0
 }
 
-// ── Strip spaces helper ────────────────────────────────────────────────────────
-const stripSpaces = (val: unknown) =>
-    typeof val === 'string' ? val.replace(/\s/g, '') : val
-
 // ── Zod schemas ───────────────────────────────────────────────────────────────
 const step1Schema = z.object({
     full_name:    z.string().min(2, 'Requis (min 2 caractères)'),
@@ -49,29 +45,28 @@ const step2Schema = z.object({
         ['independant_be', 'auto_entrepreneur_fr', 'eurl', 'sasu', 'srl_be', 'sa_be', 'autre'],
         { message: 'Statut juridique requis' }
     ),
-    // preprocess strips spaces so "123 456 789 00012" → "12345678900012"
-    siret_number: z.preprocess(
-        stripSpaces,
-        z.string()
+    // transform strips spaces so "123 456 789 00012" → "12345678900012", then validates
+    siret_number: z.string()
+        .transform((v): string => v.replace(/\s/g, ''))
+        .pipe(z.string()
             .regex(/^\d{14}$/, 'Le SIRET doit contenir exactement 14 chiffres')
             .refine(luhn, 'SIRET invalide (clé de contrôle incorrecte)')
-    ),
+        ),
 })
 
 const step3Schema = z.object({
     address_street: z.string().optional(),
     address_city:   z.string().optional(),
     // strip spaces before validating zip
-    address_zip: z.preprocess(
-        stripSpaces,
-        z.string().optional().refine(
-            v => !v || /^\d{5}$/.test(v),
-            'Code postal invalide (5 chiffres)'
-        )
-    ),
+    address_zip: z.string()
+        .transform((v): string => v.replace(/\s/g, ''))
+        .refine(v => !v || /^\d{5}$/.test(v), 'Code postal invalide (5 chiffres)')
+        .optional(),
     phone: z.string().optional(),
     // strip spaces from IBAN (e.g. "FR76 3000 …" → "FR76300…")
-    iban: z.preprocess(stripSpaces, z.string().optional()),
+    iban: z.string()
+        .transform((v): string => v.replace(/\s/g, ''))
+        .optional(),
 })
 
 type Step1Data = z.infer<typeof step1Schema>
