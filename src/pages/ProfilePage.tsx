@@ -61,7 +61,7 @@ function SubscriptionSection() {
     const isActive    = subStatus === 'active'
     const isPro       = plan === 'pro'
     const isStarter   = plan === 'starter'
-    const isTrial     = plan === 'trial'
+    const isTrial     = plan === 'trial' || plan === 'free'
     const isPaid      = isStarter || isPro                    // has a subscription row
 
     const [checkoutPending, setCheckoutPending] = useState<'starter' | 'pro' | null>(null)

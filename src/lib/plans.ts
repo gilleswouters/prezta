@@ -1,14 +1,20 @@
+// Shared config for the free/trial tier.
+// The DB column defaults to 'free'; the app uses 'trial' as the canonical key.
+// Both keys point to identical limits.
+const FREE_TIER = {
+    maxProjects:  3,
+    maxDocuments: 15,
+    storageBytes: 524_288_000,       // 500 Mo
+    firmaPerMonth: 0,
+    aiEnabled: false,
+    price: { monthly: 0, annual: 0 },
+    label: 'Gratuit',
+    trialDays: 14,
+} as const;
+
 export const PLANS = {
-    trial: {
-        maxProjects: 3,
-        maxDocuments: 15,
-        storageBytes: 524_288_000,       // 500 Mo
-        firmaPerMonth: 0,
-        aiEnabled: false,
-        price: { monthly: 0, annual: 0 },
-        label: 'Gratuit',
-        trialDays: 14,
-    },
+    trial:   FREE_TIER,              // canonical in-app value
+    free:    FREE_TIER,              // DB column default — same limits as trial
     starter: {
         maxProjects: 10,
         maxDocuments: 50,

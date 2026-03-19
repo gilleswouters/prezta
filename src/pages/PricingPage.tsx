@@ -56,7 +56,7 @@ export default function PricingPage() {
     const currentPlan = subscription?.plan ?? 'trial';
     const isPro     = currentPlan === 'pro';
     const isStarter = currentPlan === 'starter';
-    const isTrial   = currentPlan === 'trial';
+    const isTrial   = currentPlan === 'trial' || currentPlan === 'free';
 
     const starterPrice  = annual ? PLANS.starter.price.annual  : PLANS.starter.price.monthly;
     const proPrice      = annual ? PLANS.pro.price.annual      : PLANS.pro.price.monthly;

@@ -26,7 +26,7 @@ export default function AppLayout() {
         'Utilisateur';
 
     // Trial banner calculation
-    const isTrial = !subscription?.plan || subscription.plan === 'trial';
+    const isTrial = !subscription?.plan || subscription.plan === 'trial' || subscription.plan === 'free';
     const trialDaysTotal = PLANS.trial.trialDays; // 14
     const accountCreatedAt = user?.created_at ? new Date(user.created_at) : null;
     const trialDaysRemaining = accountCreatedAt

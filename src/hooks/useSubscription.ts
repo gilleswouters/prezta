@@ -27,7 +27,10 @@ export function useSubscription() {
 
             if (error) throw error;
 
-            const plan             = data?.plan || 'trial';
+            // Normalize legacy 'free' (DB column default) to 'trial' so all
+            // downstream === 'trial' checks work regardless of what the DB stored.
+            const rawPlan          = data?.plan || 'trial';
+            const plan             = rawPlan === 'free' ? 'trial' : rawPlan;
             const status           = data?.status ?? null;
             const isPro            = plan === 'pro' && status === 'active';
             const firmaUsed        = data?.firma_signatures_used ?? 0;
