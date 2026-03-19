@@ -93,7 +93,7 @@ export default function LandingPage() {
                 </p>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-                    <Button size="lg" className="bg-brand text-white hover:bg-brand-hover w-full sm:w-auto h-12 px-8 text-base font-bold shadow-lg shadow-brand/20" onClick={() => navigate('/pricing')}>
+                    <Button size="lg" className="bg-brand text-white hover:bg-brand-hover w-full sm:w-auto h-12 px-8 text-base font-bold shadow-lg shadow-brand/20" onClick={() => setShowSignup(true)}>
                         Tester Prezta dès aujourd'hui
                     </Button>
                     <Button size="lg" variant="outline" className="w-full sm:w-auto h-12 px-8 text-base font-semibold border-border bg-white text-text-secondary hover:bg-surface-hover hover:text-text-primary" onClick={() => { document.getElementById('features')?.scrollIntoView({ behavior: 'smooth' }) }}>
@@ -226,7 +226,7 @@ export default function LandingPage() {
                                 <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-emerald-500 shrink-0" />Signatures supplémentaires 1€/unité</li>
                                 <li className="flex items-center gap-2 text-text-muted"><X className="h-4 w-4 shrink-0" />Fonctionnalités IA</li>
                             </ul>
-                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => navigate('/pricing')}>
+                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => setShowSignup(true)}>
                                 Choisir Starter
                             </Button>
                         </div>
@@ -260,7 +260,7 @@ export default function LandingPage() {
                                 <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Alertes expiration · Tracking devis</li>
                                 <li className="flex items-center gap-2 text-text-primary"><Check className="h-4 w-4 text-brand shrink-0" />Dashboard revenus · Support prioritaire</li>
                             </ul>
-                            <Button className="w-full bg-brand text-white hover:bg-brand-hover font-bold shadow-md shadow-blue-200" onClick={() => navigate('/pricing')}>
+                            <Button className="w-full bg-brand text-white hover:bg-brand-hover font-bold shadow-md shadow-blue-200" onClick={() => setShowSignup(true)}>
                                 Choisir Pro
                             </Button>
                         </div>
