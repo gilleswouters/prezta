@@ -113,15 +113,12 @@ function SubscriptionSection() {
 
     function handleCheckout(url: string, target: 'starter' | 'pro') {
         if (!user?.id) return
-        const planLabel = target === 'pro' ? 'Pro' : 'Starter'
         openLemonSqueezyCheckout({
             url,
             userId: user.id,
-            onSuccess: async () => {
-                stopPolling()
-                toast.success(`🎉 Bienvenue sur le plan ${planLabel} !`)
-                await queryClient.refetchQueries({ queryKey: ['subscription'] })
-                navigate('/dashboard')
+            onSuccess: () => {
+                // Overlay closed — polling (started below) detects the plan change
+                // via useEffect once the LS webhook has updated Supabase (async, ~5–30s)
             },
         })
         startPolling(target)

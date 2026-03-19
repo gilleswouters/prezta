@@ -88,10 +88,22 @@ export function SignupModal({ open, onClose }: SignupModalProps) {
             openLemonSqueezyCheckout({
                 url:    PLAN_URLS[pendingPlan],
                 userId,
-                onSuccess: async () => {
-                    toast.success(`🎉 Bienvenue sur le plan ${planLabel} !`);
-                    await queryClient.refetchQueries({ queryKey: ['subscription'] });
-                    navigate('/dashboard');
+                onSuccess: () => {
+                    // Checkout.Success fires client-side immediately, but the LS webhook
+                    // that updates Supabase is async (5–30s). Poll until DB is updated.
+                    let attempts = 0;
+                    const poll = setInterval(async () => {
+                        attempts++;
+                        await queryClient.refetchQueries({ queryKey: ['subscription'] });
+                        const sub = queryClient.getQueryData<{ plan: string; status: string | null }>(
+                            ['subscription', userId]
+                        );
+                        const upgraded =
+                            (pendingPlan === 'pro'     && sub?.plan === 'pro'     && sub?.status === 'active') ||
+                            (pendingPlan === 'starter' && sub?.plan === 'starter' && sub?.status === 'active');
+                        if (upgraded || attempts >= 15) clearInterval(poll);
+                        if (upgraded) toast.success(`🎉 Bienvenue sur le plan ${planLabel} !`);
+                    }, 2_000);
                 },
             });
         } else {
