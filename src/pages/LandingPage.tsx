@@ -3,11 +3,13 @@ import { useNavigate, Navigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { CheckCircle2, ChevronRight, FileText, FolderKanban, PenTool, Euro, Sparkles, Globe, Check, X } from 'lucide-react';
+import { SignupModal } from '@/components/auth/SignupModal';
 
 export default function LandingPage() {
     const { session, loading } = useAuth();
     const navigate = useNavigate();
     const [annual, setAnnual] = useState(false);
+    const [showSignup, setShowSignup] = useState(false);
 
     if (loading) return null;
 
@@ -51,6 +53,7 @@ export default function LandingPage() {
 
     return (
         <div className="min-h-screen bg-white text-text-primary selection:bg-brand-light font-sans">
+            <SignupModal open={showSignup} onClose={() => setShowSignup(false)} />
             {/* Navbar */}
             <nav className="fixed top-0 w-full z-50 bg-white/80 backdrop-blur-md border-b border-border">
                 <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
@@ -67,7 +70,7 @@ export default function LandingPage() {
                         <Button variant="ghost" className="text-sm font-medium hover:bg-surface-hover" onClick={() => navigate('/login')}>
                             Connexion
                         </Button>
-                        <Button className="bg-brand text-white hover:bg-brand-hover text-sm font-semibold" onClick={() => navigate('/pricing')}>
+                        <Button className="bg-brand text-white hover:bg-brand-hover text-sm font-semibold" onClick={() => setShowSignup(true)}>
                             S'abonner
                         </Button>
                     </div>
@@ -197,7 +200,7 @@ export default function LandingPage() {
                                 <li className="flex items-center gap-2 text-text-muted"><X className="h-4 w-4 shrink-0" />Signatures FIRMA</li>
                                 <li className="flex items-center gap-2 text-text-muted"><X className="h-4 w-4 shrink-0" />Fonctionnalités IA</li>
                             </ul>
-                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => navigate('/signup')}>
+                            <Button className="w-full bg-text-primary text-white hover:bg-text-primary/90 font-semibold" onClick={() => setShowSignup(true)}>
                                 Commencer gratuitement
                             </Button>
                         </div>
@@ -268,11 +271,11 @@ export default function LandingPage() {
             {/* Footer */}
             <footer className="bg-white border-t border-border py-12 px-6">
                 <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-6">
-                    <div>
+                    <div className="text-center md:text-left">
                         <div className="font-extrabold text-brand text-xl tracking-tight mb-2">Prezta</div>
                         <p className="text-sm text-text-muted font-medium">Le workspace pour freelances francophones</p>
                     </div>
-                    <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold text-text-secondary">
+                    <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm font-semibold text-text-secondary">
                         <a href="#features" className="hover:text-brand">Fonctionnalités</a>
                         <a href="#pricing" className="hover:text-brand">Tarifs</a>
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/login')}>Connexion</span>
@@ -281,7 +284,7 @@ export default function LandingPage() {
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/confidentialite')}>Confidentialité</span>
                         <span className="cursor-pointer hover:text-brand" onClick={() => navigate('/cgv')}>CGV</span>
                     </div>
-                    <div className="text-xs text-text-muted font-medium text-right">
+                    <div className="text-xs text-text-muted font-medium text-center md:text-right">
                         Made in France 🇫🇷 · Données hébergées en Europe<br />
                         © 2026 Prezta
                     </div>
