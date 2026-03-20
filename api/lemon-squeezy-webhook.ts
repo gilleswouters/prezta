@@ -1,7 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const config = { runtime: 'nodejs' };
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface LSAttributes {
@@ -22,6 +20,10 @@ interface LSPayload {
         attributes: LSAttributes;
     };
 }
+
+// ─── Env accessor ─────────────────────────────────────────────────────────────
+
+const getEnv = (key: string) => process.env[key] ?? '';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,7 +49,7 @@ export default async function handler(req: Request): Promise<Response> {
         return new Response('Method not allowed', { status: 405 });
     }
 
-    const secret = process.env.LEMON_SQUEEZY_WEBHOOK_SECRET ?? '';
+    const secret = getEnv('LEMON_SQUEEZY_WEBHOOK_SECRET');
     const body   = await req.text();
     const sig    = req.headers.get('x-signature') ?? '';
 
@@ -82,10 +84,8 @@ export default async function handler(req: Request): Promise<Response> {
 
     // ── Supabase client (service role — full access) ──────────────────────────
 
-    // NOTE: VITE_ prefixed vars are baked at build time by Vite — they are NOT available
-    // as process.env at runtime in Vercel Edge Functions. Use SUPABASE_URL instead.
-    const supabaseUrl      = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '';
-    const serviceRoleKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
+    const supabaseUrl    = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
+    const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
 
     if (!supabaseUrl || !serviceRoleKey) {
         console.error('[LS Webhook] Missing Supabase env vars');

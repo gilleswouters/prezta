@@ -4,8 +4,5 @@
             "source": "/((?!api/).*)",
             "destination": "/index.html"
         }
-    ],
-    "functions": {
-        "api/lemon-squeezy-webhook.ts": { "runtime": "nodejs20.x" }
-    }
+    ]
 }
