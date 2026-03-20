@@ -1,5 +1,4 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { createClient } from '@supabase/supabase-js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,7 +53,7 @@ async function computeHmac(secret: string, body: string): Promise<string> {
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
     const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Supabase timeout after ${ms}ms: ${label}`)), ms)
+        setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${label}`)), ms)
     );
     return Promise.race([promise, timeout]);
 }
@@ -74,7 +73,7 @@ async function processWebhook(body: string): Promise<void> {
 
     console.error('[LS webhook] Step 2: extracted userId:', userId, 'event:', eventName);
 
-    console.error('[LS webhook] Step 3: creating Supabase client');
+    console.error('[LS webhook] Step 3: resolving Supabase REST config');
     const supabaseUrl    = getEnv('SUPABASE_URL') || getEnv('VITE_SUPABASE_URL');
     const serviceRoleKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
 
@@ -83,7 +82,12 @@ async function processWebhook(body: string): Promise<void> {
         return;
     }
 
-    const supabase = createClient(supabaseUrl, serviceRoleKey);
+    const restBase = `${supabaseUrl}/rest/v1`;
+    const authHeaders = {
+        'Content-Type':  'application/json',
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'apikey':        serviceRoleKey,
+    };
 
     // ── subscription_created / subscription_updated ───────────────────────────
 
@@ -101,21 +105,29 @@ async function processWebhook(body: string): Promise<void> {
 
         console.error('[LS webhook] Step 4: starting upsert — plan:', plan, 'status:', status);
 
-        const { error } = await withTimeout(
-            supabase.from('subscriptions').upsert({
-                user_id:            userId,
-                plan,
-                status,
-                lemon_squeezy_id:   payload.data.id,
-                current_period_end: attrs.renews_at,
-                updated_at:         new Date().toISOString(),
-            }, { onConflict: 'user_id' }),
+        const res = await withTimeout(
+            fetch(`${restBase}/subscriptions`, {
+                method:  'POST',
+                headers: { ...authHeaders, 'Prefer': 'resolution=merge-duplicates' },
+                body:    JSON.stringify({
+                    user_id:            userId,
+                    plan,
+                    status,
+                    lemon_squeezy_id:   payload.data.id,
+                    current_period_end: attrs.renews_at,
+                    updated_at:         new Date().toISOString(),
+                }),
+            }),
             10_000,
             'subscription upsert'
         );
 
-        if (error) throw error;
-        console.error('[LS webhook] Step 5: upsert complete —', eventName, 'user:', userId, 'plan:', plan, 'status:', status);
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error('[LS webhook] REST upsert failed:', res.status, errText);
+            throw new Error(`REST upsert failed: ${res.status} ${errText}`);
+        }
+        console.error('[LS webhook] Step 5: upsert complete via REST API —', eventName, 'user:', userId, 'plan:', plan, 'status:', status);
 
     // ── subscription_cancelled ────────────────────────────────────────────────
 
@@ -127,20 +139,25 @@ async function processWebhook(body: string): Promise<void> {
 
         console.error('[LS webhook] Step 4: starting update — subscription_cancelled');
 
-        const { error } = await withTimeout(
-            supabase
-                .from('subscriptions')
-                .update({
-                    status: 'cancelled',
+        const res = await withTimeout(
+            fetch(`${restBase}/subscriptions?user_id=eq.${encodeURIComponent(userId)}`, {
+                method:  'PATCH',
+                headers: authHeaders,
+                body:    JSON.stringify({
+                    status:             'cancelled',
                     current_period_end: attrs.ends_at ?? attrs.renews_at,
-                })
-                .eq('user_id', userId),
+                }),
+            }),
             10_000,
             'subscription_cancelled update'
         );
 
-        if (error) throw error;
-        console.error('[LS webhook] Step 5: upsert complete — subscription_cancelled user:', userId);
+        if (!res.ok) {
+            const errText = await res.text();
+            console.error('[LS webhook] REST update failed:', res.status, errText);
+            throw new Error(`REST update failed: ${res.status} ${errText}`);
+        }
+        console.error('[LS webhook] Step 5: upsert complete via REST API — subscription_cancelled user:', userId);
 
     // ── order_created (one-time — à la carte signatures) ─────────────────────
 
@@ -152,32 +169,40 @@ async function processWebhook(body: string): Promise<void> {
 
         console.error('[LS webhook] Step 4: starting fetch — order_created');
 
-        const { data: row, error: fetchErr } = await withTimeout(
-            supabase
-                .from('subscriptions')
-                .select('firma_signatures_used')
-                .eq('user_id', userId)
-                .maybeSingle(),
+        const fetchRes = await withTimeout(
+            fetch(`${restBase}/subscriptions?user_id=eq.${encodeURIComponent(userId)}&select=firma_signatures_used`, {
+                method:  'GET',
+                headers: authHeaders,
+            }),
             10_000,
             'order_created fetch'
         );
 
-        if (fetchErr) throw fetchErr;
+        if (!fetchRes.ok) {
+            const errText = await fetchRes.text();
+            console.error('[LS webhook] REST fetch failed:', fetchRes.status, errText);
+            throw new Error(`REST fetch failed: ${fetchRes.status} ${errText}`);
+        }
 
-        const current = (row as { firma_signatures_used: number | null } | null)
-            ?.firma_signatures_used ?? 0;
+        const rows = await fetchRes.json() as Array<{ firma_signatures_used: number | null }>;
+        const current = rows[0]?.firma_signatures_used ?? 0;
 
-        const { error: updateErr } = await withTimeout(
-            supabase
-                .from('subscriptions')
-                .update({ firma_signatures_used: current + 1 })
-                .eq('user_id', userId),
+        const updateRes = await withTimeout(
+            fetch(`${restBase}/subscriptions?user_id=eq.${encodeURIComponent(userId)}`, {
+                method:  'PATCH',
+                headers: authHeaders,
+                body:    JSON.stringify({ firma_signatures_used: current + 1 }),
+            }),
             10_000,
             'order_created update'
         );
 
-        if (updateErr) throw updateErr;
-        console.error('[LS webhook] Step 5: upsert complete — order_created firma_signatures_used →', current + 1, 'user:', userId);
+        if (!updateRes.ok) {
+            const errText = await updateRes.text();
+            console.error('[LS webhook] REST update failed:', updateRes.status, errText);
+            throw new Error(`REST update failed: ${updateRes.status} ${errText}`);
+        }
+        console.error('[LS webhook] Step 5: upsert complete via REST API — order_created firma_signatures_used →', current + 1, 'user:', userId);
 
     } else {
         console.error('[LS webhook] Unhandled event:', eventName);
