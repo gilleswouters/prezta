@@ -1,198 +1,210 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import { crypto } from "https://deno.land/std@0.168.0/crypto/mod.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-serve(async (req) => {
-    console.log("--> 🟢 WEBHOOK REACHED 🟢 <--", req.method, req.url);
-    try {
-        // Fetch secrets on every request to ensure they aren't stale
-        const LE_SQUEEZY_SECRET = Deno.env.get("LEMON_SQUEEZY_WEBHOOK_SECRET");
-        const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-        const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-        const RESEND_API_KEY = Deno.env.get("RESEND_API_KEY");
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-        if (req.method !== 'POST') {
-            return new Response("Method not allowed", { status: 405 });
-        }
-
-        const signature = req.headers.get("x-signature");
-        if (!signature || !LE_SQUEEZY_SECRET) {
-            console.error("Missing signature or secret!", {
-                hasSignature: !!signature,
-                hasSecret: !!LE_SQUEEZY_SECRET
-            });
-            return new Response("Missing signature or secret", { status: 401 });
-        }
-
-        const body = await req.text();
-
-        // 3. Verify Lemon Squeezy Signature (from working snippet)
-        const encoder = new TextEncoder();
-        const key = await crypto.subtle.importKey(
-            'raw',
-            encoder.encode(LE_SQUEEZY_SECRET),
-            { name: 'HMAC', hash: 'SHA-256' },
-            false,
-            ['sign']
-        );
-        const signatureBuffer = await crypto.subtle.sign(
-            'HMAC',
-            key,
-            encoder.encode(body)
-        );
-
-        const hexSignature = Array.from(new Uint8Array(signatureBuffer))
-            .map(b => b.toString(16).padStart(2, '0'))
-            .join('');
-
-        if (signature !== hexSignature) {
-            console.error('Signature mismatch', { received: signature, expected: hexSignature });
-            return new Response('Signature mismatch', { status: 401 });
-        }
-
-        const payload = JSON.parse(body);
-        const eventName = payload.meta.event_name;
-        const data = payload.data.attributes;
-        const userEmail = data.user_email;
-        const userName = data.user_name || "Freelancer";
-
-        if (!userEmail) {
-            console.error("No user_email found in webhook data");
-            return new Response("Missing user_email in data", { status: 400 });
-        }
-
-        const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-        console.log(`Processing event: ${eventName} for email: ${userEmail}`);
-
-        if (eventName === 'subscription_created' || eventName === 'subscription_updated') {
-            // 1. Resolve User ID (Find or Create)
-            let userId = null;
-            let isNewUser = false;
-            let magicLink = null;
-
-            const { data: existingProfile } = await supabase
-                .from('profiles')
-                .select('id')
-                .eq('email', userEmail)
-                .single();
-
-            if (existingProfile) {
-                userId = existingProfile.id;
-            } else {
-                console.log(`Creating new user for: ${userEmail}`);
-                const { data: newUser, error: createError } = await supabase.auth.admin.createUser({
-                    email: userEmail,
-                    email_confirm: true,
-                    user_metadata: { full_name: userName }
-                });
-
-                if (createError) throw createError;
-                userId = newUser.user.id;
-                isNewUser = true;
-
-                // Generate Magic Link
-                const { data: linkData } = await supabase.auth.admin.generateLink({
-                    type: 'magiclink',
-                    email: userEmail
-                });
-
-                magicLink = linkData?.properties?.action_link;
-            }
-
-            // 2. Update the Subscription Table
-            const { data: existingSub } = await supabase
-                .from('subscriptions')
-                .select('id')
-                .eq('user_id', userId)
-                .single();
-
-            let subError;
-            if (existingSub) {
-                const { error } = await supabase.from('subscriptions').update({
-                    plan: 'pro',
-                    status: data.status,
-                    lemon_squeezy_id: payload.data.id,
-                    current_period_end: data.renews_at
-                }).eq('user_id', userId);
-                subError = error;
-            } else {
-                const { error } = await supabase.from('subscriptions').insert({
-                    user_id: userId,
-                    plan: 'pro',
-                    status: data.status,
-                    lemon_squeezy_id: payload.data.id,
-                    current_period_end: data.renews_at
-                });
-                subError = error;
-            }
-
-            if (subError) throw subError;
-
-            // 3. Send Welcome Email via Resend if New User
-            if (isNewUser && magicLink && RESEND_API_KEY) {
-                const res = await fetch('https://api.resend.com/emails', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${RESEND_API_KEY}`,
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        from: 'Prezta <hello@prezta.eu>',
-                        to: userEmail,
-                        subject: 'Bienvenue sur Prezta Pro 🚀',
-                        html: `
-                            <div style="font-family: sans-serif; max-w: 600px; margin: 0 auto;">
-                                <h1>Bienvenue dans Prezta, ${userName} !</h1>
-                                <p>Merci pour votre abonnement. Votre compte Pro a été créé automatiquement avec succès.</p>
-                                <p>Pour vous connecter immédiatement sans mot de passe, cliquez sur le lien magique ci-dessous :</p>
-                                <a href="${magicLink}" style="display: inline-block; padding: 12px 24px; background-color: #2563eb; color: white; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 20px 0;">
-                                    Accéder à mon Dashboard
-                                </a>
-                                <p>Pour vos prochaines connexions, vous pourrez utiliser ce même email sur l'écran de connexion.</p>
-                                <p>L'équipe Prezta</p>
-                            </div>
-                        `
-                    })
-                });
-
-                if (!res.ok) {
-                    console.error("Resend Email Error:", await res.text());
-                } else {
-                    console.log("Welcome email sent successfully!");
-                }
-            }
-
-        } else if (eventName === 'subscription_cancelled' || eventName === 'subscription_expired') {
-            // Find user id from email to cancel
-            const { data: profile } = await supabase.from('profiles').select('id').eq('email', userEmail).single();
-            if (profile) {
-                const { error } = await supabase
-                    .from('subscriptions')
-                    .update({ status: data.status })
-                    .eq('user_id', profile.id);
-                if (error) throw error;
-            }
-        }
-
-        return new Response(JSON.stringify({ status: "ok" }), {
-            headers: { "Content-Type": "application/json" },
-            status: 200,
-        });
-
-    } catch (error: any) {
-        console.error("Webhook processing error:", error);
-        return new Response(JSON.stringify({ error: error.message }), {
-            headers: { "Content-Type": "application/json" },
-            status: 500,
-        });
-    }
-});
-
-// Helper function to decode hex string to Uint8Array safely in Edge environment
-function hexToBytes(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < bytes.length; i++) {
-        bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-    }
-    return bytes;
+interface LSAttributes {
+    status: string
+    renews_at: string | null
+    ends_at: string | null
+    variant_name?: string
+    product_name?: string
+    custom_data?: Record<string, string>
 }
+
+interface LSPayload {
+    meta: {
+        event_name: string
+        custom_data?: Record<string, string>
+    }
+    data: {
+        id: string
+        attributes: LSAttributes
+    }
+}
+
+// ─── HMAC validation ──────────────────────────────────────────────────────────
+
+async function verifySignature(secret: string, rawBody: string, signature: string): Promise<boolean> {
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+    )
+    const mac = await crypto.subtle.sign('HMAC', key, encoder.encode(rawBody))
+    const expected = Array.from(new Uint8Array(mac))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
+    // Accept both plain hex and sha256=hex (LS sends plain hex)
+    return signature === expected || signature === `sha256=${expected}`
+}
+
+// ─── Async processor ──────────────────────────────────────────────────────────
+
+async function processWebhook(payload: LSPayload): Promise<void> {
+    const eventName = payload.meta.event_name
+    // LS puts user_id in meta.custom_data; some event shapes nest it under attributes
+    const userId = payload.meta.custom_data?.user_id
+        ?? payload.data.attributes.custom_data?.user_id
+    const attrs = payload.data.attributes
+
+    console.error('[LS webhook] Step 2: extracted userId:', userId, 'event:', eventName)
+
+    const supabaseUrl    = Deno.env.get('SUPABASE_URL')!
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+
+    console.error('[LS webhook] Step 3: supabaseUrl prefix:', supabaseUrl.substring(0, 30))
+    console.error('[LS webhook] Step 3: serviceRoleKey prefix:', serviceRoleKey.substring(0, 10))
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: {
+            autoRefreshToken: false,
+            persistSession:   false,
+        },
+    })
+
+    // ── subscription_created / subscription_updated ───────────────────────────
+
+    if (eventName === 'subscription_created' || eventName === 'subscription_updated') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for', eventName, '— full payload:', JSON.stringify(payload))
+            return
+        }
+
+        const nameToCheck = (
+            (attrs.variant_name ?? '') || (attrs.product_name ?? '')
+        ).toLowerCase()
+        const plan = nameToCheck.includes('starter') ? 'starter' : 'pro'
+        // On creation force 'active' — Prezta manages its own trial, LS trial periods unused
+        const status = eventName === 'subscription_created' ? 'active' : attrs.status
+
+        console.error('[LS webhook] Step 4: about to call supabase.from(subscriptions).upsert — plan:', plan, 'status:', status)
+
+        const { error } = await supabase.from('subscriptions').upsert({
+            user_id:            userId,
+            plan,
+            status,
+            lemon_squeezy_id:   payload.data.id,
+            current_period_end: attrs.renews_at,
+            updated_at:         new Date().toISOString(),
+        }, { onConflict: 'user_id' })
+
+        console.error('[LS webhook] Step 5: upsert returned, error:', error?.message ?? 'none')
+        if (error) throw error
+
+    // ── subscription_cancelled ────────────────────────────────────────────────
+
+    } else if (eventName === 'subscription_cancelled') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for subscription_cancelled')
+            return
+        }
+
+        console.error('[LS webhook] Step 4: starting update — subscription_cancelled')
+
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({
+                status:             'cancelled',
+                current_period_end: attrs.ends_at ?? attrs.renews_at,
+            })
+            .eq('user_id', userId)
+
+        if (error) {
+            console.error('[LS webhook] update error:', error.message, error.code)
+            throw error
+        }
+        console.error('[LS webhook] Step 5: complete — subscription_cancelled user:', userId)
+
+    // ── order_created (one-time — à la carte signatures) ─────────────────────
+
+    } else if (eventName === 'order_created') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for order_created')
+            return
+        }
+
+        console.error('[LS webhook] Step 4: starting fetch — order_created')
+
+        const { data: row, error: fetchErr } = await supabase
+            .from('subscriptions')
+            .select('firma_signatures_used')
+            .eq('user_id', userId)
+            .maybeSingle()
+
+        if (fetchErr) {
+            console.error('[LS webhook] fetch error:', fetchErr.message, fetchErr.code)
+            throw fetchErr
+        }
+
+        const current = (row as { firma_signatures_used: number | null } | null)
+            ?.firma_signatures_used ?? 0
+
+        const { error: updateErr } = await supabase
+            .from('subscriptions')
+            .update({ firma_signatures_used: current + 1 })
+            .eq('user_id', userId)
+
+        if (updateErr) {
+            console.error('[LS webhook] update error:', updateErr.message, updateErr.code)
+            throw updateErr
+        }
+        console.error('[LS webhook] Step 5: complete — order_created firma_signatures_used →', current + 1, 'user:', userId)
+
+    } else {
+        console.error('[LS webhook] Unhandled event:', eventName)
+    }
+}
+
+// ─── Handler ──────────────────────────────────────────────────────────────────
+
+Deno.serve(async (req: Request) => {
+    if (req.method === 'OPTIONS') {
+        return new Response('ok', { headers: { 'Access-Control-Allow-Origin': '*' } })
+    }
+
+    if (req.method !== 'POST') {
+        return new Response('Method not allowed', { status: 405 })
+    }
+
+    const rawBody = await req.text()
+    const webhookSecret = Deno.env.get('LEMON_SQUEEZY_WEBHOOK_SECRET') ?? ''
+
+    // HMAC signature validation
+    if (webhookSecret) {
+        const signature = req.headers.get('x-signature') ?? ''
+        const valid = await verifySignature(webhookSecret, rawBody, signature)
+        if (!valid) {
+            console.error('[LS webhook] Signature mismatch — returning 200 silently to prevent retries')
+            return new Response('OK', { status: 200 })
+        }
+    } else {
+        console.error('[LS webhook] LEMON_SQUEEZY_WEBHOOK_SECRET not set — validation disabled')
+    }
+
+    let payload: LSPayload
+    try {
+        payload = JSON.parse(rawBody) as LSPayload
+    } catch {
+        console.error('[LS webhook] Malformed JSON body')
+        return new Response('OK', { status: 200 })
+    }
+
+    console.error('[LS webhook] Step 1: received event:', payload.meta.event_name)
+
+    // Return 200 to LS immediately then process DB write asynchronously
+    const processing = processWebhook(payload).catch(err =>
+        console.error('[LS webhook] async processing error:', err instanceof Error ? err.message : String(err))
+    )
+
+    // EdgeRuntime.waitUntil keeps the function alive until processing completes
+    // deno-lint-ignore no-explicit-any
+    if (typeof (globalThis as any).EdgeRuntime !== 'undefined') {
+        // deno-lint-ignore no-explicit-any
+        ;(globalThis as any).EdgeRuntime.waitUntil(processing)
+    }
+
+    return new Response('OK', { status: 200 })
+})
