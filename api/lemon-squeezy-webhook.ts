@@ -52,13 +52,6 @@ async function computeHmac(secret: string, body: string): Promise<string> {
         .join('');
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
-    const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error(`Timeout after ${ms}ms: ${label}`)), ms)
-    );
-    return Promise.race([promise, timeout]);
-}
-
 // ─── Async processor (runs after 200 is returned to LS) ───────────────────────
 
 async function processWebhook(body: string): Promise<void> {
@@ -86,22 +79,6 @@ async function processWebhook(body: string): Promise<void> {
     console.error('[LS webhook] Step 3: supabaseUrl prefix:', supabaseUrl.substring(0, 30));
     console.error('[LS webhook] Step 3: serviceRoleKey prefix:', serviceRoleKey.substring(0, 10));
 
-    // Connection probe via raw fetch — works regardless of key format
-    console.error('[LS webhook] Step 3.5: testing Supabase connection');
-    const testResponse = await withTimeout(
-        fetch(`${supabaseUrl}/rest/v1/`, {
-            headers: {
-                'Authorization':  `Bearer ${serviceRoleKey}`,
-                'apikey':         serviceRoleKey,
-                'x-client-info':  'prezta-webhook',
-            },
-        }),
-        5_000,
-        'connection test'
-    );
-    console.error('[LS webhook] Step 3.5 result:', testResponse.status,
-        await testResponse.text().catch(() => 'no body'));
-
     // supabase-js v2+ accepts the new sb_secret_ key format as the service role key.
     // autoRefreshToken + persistSession must be false for server-side usage.
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
@@ -128,7 +105,7 @@ async function processWebhook(body: string): Promise<void> {
         const plan: 'starter' | 'pro' = nameToCheck.includes('starter') ? 'starter' : 'pro';
         const status = eventName === 'subscription_created' ? 'active' : attrs.status;
 
-        console.error('[LS webhook] Step 4: starting upsert — plan:', plan, 'status:', status);
+        console.error('[LS webhook] Step 4: about to call supabase.from(subscriptions).upsert');
 
         const { error } = await supabase.from('subscriptions').upsert({
             user_id:            userId,
@@ -139,11 +116,8 @@ async function processWebhook(body: string): Promise<void> {
             updated_at:         new Date().toISOString(),
         }, { onConflict: 'user_id' });
 
-        if (error) {
-            console.error('[LS webhook] upsert error:', error.message, error.code);
-            throw error;
-        }
-        console.error('[LS webhook] Step 5: upsert complete —', eventName, 'user:', userId, 'plan:', plan, 'status:', status);
+        console.error('[LS webhook] Step 5: upsert returned, error:', error?.message ?? 'none');
+        if (error) throw error;
 
     // ── subscription_cancelled ────────────────────────────────────────────────
 
@@ -243,11 +217,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         return;
     }
 
-    // Process async without blocking the response
-    processWebhook(rawBody).catch(err =>
-        console.error('[LS webhook] async processing error:', err instanceof Error ? err.message : String(err))
-    );
-
     // Return 200 to LS immediately so it does not retry on slow DB operations
     res.status(200).send('OK');
+
+    // Process async after response — guard with 30s log timeout (Vercel Node allows up to 60s)
+    const processingTimeout = setTimeout(() => {
+        console.error('[LS webhook] Processing timeout after 30s');
+    }, 30_000);
+
+    processWebhook(rawBody)
+        .then(() => clearTimeout(processingTimeout))
+        .catch(err => {
+            clearTimeout(processingTimeout);
+            console.error('[LS webhook] Processing error:', err instanceof Error ? err.message : String(err));
+        });
 }
