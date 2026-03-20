@@ -74,12 +74,17 @@ export default async function handler(req: Request): Promise<Response> {
     }
 
     const eventName  = payload.meta.event_name;
-    const userId     = payload.meta.custom_data?.user_id;
+    // LS puts custom_data in meta.custom_data; some events nest it under attributes
+    const userId     = payload.meta.custom_data?.user_id
+        ?? (payload.data.attributes as Record<string, unknown> & { custom_data?: Record<string, string> })
+            .custom_data?.user_id;
     const attrs      = payload.data.attributes;
 
     // ── Supabase client (service role — full access) ──────────────────────────
 
-    const supabaseUrl      = process.env.VITE_SUPABASE_URL ?? '';
+    // NOTE: VITE_ prefixed vars are baked at build time by Vite — they are NOT available
+    // as process.env at runtime in Vercel Edge Functions. Use SUPABASE_URL instead.
+    const supabaseUrl      = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL ?? '';
     const serviceRoleKey   = process.env.SUPABASE_SERVICE_ROLE_KEY ?? '';
 
     if (!supabaseUrl || !serviceRoleKey) {
@@ -122,7 +127,7 @@ export default async function handler(req: Request): Promise<Response> {
             }, { onConflict: 'user_id' });
 
             if (error) throw error;
-            console.log(`[LS Webhook] ${eventName} — user ${userId} → plan=${plan} status=${status}`);
+            console.error(`[LS Webhook] ${eventName} — user ${userId} → plan=${plan} status=${status}`);
 
         // ── subscription_cancelled ────────────────────────────────────────────
 
@@ -142,7 +147,7 @@ export default async function handler(req: Request): Promise<Response> {
                 .eq('user_id', userId);
 
             if (error) throw error;
-            console.log(`[LS Webhook] subscription_cancelled — user ${userId}`);
+            console.error(`[LS Webhook] subscription_cancelled — user ${userId}`);
 
         // ── order_created (one-time — à la carte signatures) ─────────────────
 
@@ -169,10 +174,10 @@ export default async function handler(req: Request): Promise<Response> {
                 .eq('user_id', userId);
 
             if (updateErr) throw updateErr;
-            console.log(`[LS Webhook] order_created — firma_signatures_used → ${current + 1} for user ${userId}`);
+            console.error(`[LS Webhook] order_created — firma_signatures_used → ${current + 1} for user ${userId}`);
 
         } else {
-            console.log(`[LS Webhook] Unhandled event: ${eventName}`);
+            console.error(`[LS Webhook] Unhandled event: ${eventName}`);
         }
 
         return new Response(JSON.stringify({ ok: true, event: eventName }), {
