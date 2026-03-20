@@ -78,7 +78,7 @@ export default async function handler(req: Request): Promise<Response> {
     const eventName  = payload.meta.event_name;
     // LS puts custom_data in meta.custom_data; some events nest it under attributes
     const userId     = payload.meta.custom_data?.user_id
-        ?? (payload.data.attributes as Record<string, unknown> & { custom_data?: Record<string, string> })
+        ?? (payload.data.attributes as unknown as Record<string, unknown> & { custom_data?: Record<string, string> })
             .custom_data?.user_id;
     const attrs      = payload.data.attributes;
 
