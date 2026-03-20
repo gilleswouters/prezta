@@ -39,7 +39,8 @@ export function useSubscription() {
             return { plan, isPro, firmaUsed, currentPeriodEnd, status };
         },
         enabled: !!session?.user.id,
-        staleTime: 30 * 1000,        // 30 seconds — fast refresh after LS webhook
+        staleTime: 0,                // always treat cached data as stale — refetch on every focus/interval
         refetchOnWindowFocus: true,  // re-check when user tabs back after paying
+        refetchInterval: 10_000,     // poll every 10 s so plan updates shortly after webhook fires
     });
 }

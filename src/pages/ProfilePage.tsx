@@ -117,8 +117,10 @@ function SubscriptionSection() {
             url,
             userId: user.id,
             onSuccess: () => {
-                // Overlay closed — polling (started below) detects the plan change
-                // via useEffect once the LS webhook has updated Supabase (async, ~5–30s)
+                // Overlay closed — invalidate immediately so the next render fetches fresh data.
+                // The polling loop (started below) continues to check every 2 s until the
+                // webhook has updated Supabase (async, ~5–30 s after payment).
+                void queryClient.invalidateQueries({ queryKey: ['subscription'] })
             },
         })
         startPolling(target)
