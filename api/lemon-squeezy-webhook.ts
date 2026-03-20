@@ -130,18 +130,14 @@ async function processWebhook(body: string): Promise<void> {
 
         console.error('[LS webhook] Step 4: starting upsert — plan:', plan, 'status:', status);
 
-        const { error } = await withTimeout(
-            supabase.from('subscriptions').upsert({
-                user_id:            userId,
-                plan,
-                status,
-                lemon_squeezy_id:   payload.data.id,
-                current_period_end: attrs.renews_at,
-                updated_at:         new Date().toISOString(),
-            }, { onConflict: 'user_id' }),
-            10_000,
-            'subscription upsert'
-        );
+        const { error } = await supabase.from('subscriptions').upsert({
+            user_id:            userId,
+            plan,
+            status,
+            lemon_squeezy_id:   payload.data.id,
+            current_period_end: attrs.renews_at,
+            updated_at:         new Date().toISOString(),
+        }, { onConflict: 'user_id' });
 
         if (error) {
             console.error('[LS webhook] upsert error:', error.message, error.code);
@@ -159,17 +155,13 @@ async function processWebhook(body: string): Promise<void> {
 
         console.error('[LS webhook] Step 4: starting update — subscription_cancelled');
 
-        const { error } = await withTimeout(
-            supabase
-                .from('subscriptions')
-                .update({
-                    status:             'cancelled',
-                    current_period_end: attrs.ends_at ?? attrs.renews_at,
-                })
-                .eq('user_id', userId),
-            10_000,
-            'subscription_cancelled update'
-        );
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({
+                status:             'cancelled',
+                current_period_end: attrs.ends_at ?? attrs.renews_at,
+            })
+            .eq('user_id', userId);
 
         if (error) {
             console.error('[LS webhook] update error:', error.message, error.code);
@@ -187,15 +179,11 @@ async function processWebhook(body: string): Promise<void> {
 
         console.error('[LS webhook] Step 4: starting fetch — order_created');
 
-        const { data: row, error: fetchErr } = await withTimeout(
-            supabase
-                .from('subscriptions')
-                .select('firma_signatures_used')
-                .eq('user_id', userId)
-                .maybeSingle(),
-            10_000,
-            'order_created fetch'
-        );
+        const { data: row, error: fetchErr } = await supabase
+            .from('subscriptions')
+            .select('firma_signatures_used')
+            .eq('user_id', userId)
+            .maybeSingle();
 
         if (fetchErr) {
             console.error('[LS webhook] fetch error:', fetchErr.message, fetchErr.code);
@@ -205,14 +193,10 @@ async function processWebhook(body: string): Promise<void> {
         const current = (row as { firma_signatures_used: number | null } | null)
             ?.firma_signatures_used ?? 0;
 
-        const { error: updateErr } = await withTimeout(
-            supabase
-                .from('subscriptions')
-                .update({ firma_signatures_used: current + 1 })
-                .eq('user_id', userId),
-            10_000,
-            'order_created update'
-        );
+        const { error: updateErr } = await supabase
+            .from('subscriptions')
+            .update({ firma_signatures_used: current + 1 })
+            .eq('user_id', userId);
 
         if (updateErr) {
             console.error('[LS webhook] update error:', updateErr.message, updateErr.code);
