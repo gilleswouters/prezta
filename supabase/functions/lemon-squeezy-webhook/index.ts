@@ -6,6 +6,7 @@ interface LSAttributes {
     status: string
     renews_at: string | null
     ends_at: string | null
+    variant_id?: number | string
     variant_name?: string
     product_name?: string
     custom_data?: Record<string, string>
@@ -73,10 +74,27 @@ async function processWebhook(payload: LSPayload): Promise<void> {
             return
         }
 
-        const nameToCheck = (
-            (attrs.variant_name ?? '') || (attrs.product_name ?? '')
-        ).toLowerCase()
-        const plan = nameToCheck.includes('starter') ? 'starter' : 'pro'
+        // Log raw LS identifiers to diagnose plan mapping issues
+        const variantId = String(attrs.variant_id ?? '')
+        console.error('[LS webhook] variant_id:', variantId)
+        console.error('[LS webhook] variant_name:', attrs.variant_name)
+        console.error('[LS webhook] product_name:', attrs.product_name)
+
+        // Primary: match by variant_id against Supabase secrets (reliable, not locale-dependent)
+        // Fallback: string match on product_name / variant_name
+        // Default: 'starter' — safer than defaulting to 'pro' on unknown variants
+        const starterVariantId = Deno.env.get('LS_STARTER_MONTHLY_VARIANT_ID') ?? ''
+        const proVariantId     = Deno.env.get('LS_PRO_MONTHLY_VARIANT_ID') ?? ''
+        const productLower     = (attrs.product_name ?? '').toLowerCase()
+        const variantLower     = (attrs.variant_name ?? '').toLowerCase()
+
+        const plan =
+            (starterVariantId && variantId === starterVariantId) ? 'starter' :
+            (proVariantId     && variantId === proVariantId)     ? 'pro'     :
+            productLower.includes('starter') || variantLower.includes('starter') ? 'starter' :
+            productLower.includes('pro')     || variantLower.includes('pro')     ? 'pro'     :
+            'starter' // default to starter — less harmful than wrongly granting pro
+
         // On creation force 'active' — Prezta manages its own trial, LS trial periods unused
         const status = eventName === 'subscription_created' ? 'active' : attrs.status
 
