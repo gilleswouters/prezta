@@ -1,3 +1,4 @@
+import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -26,6 +27,15 @@ interface LSPayload {
 const getEnv = (key: string) => process.env[key] ?? '';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+async function getRawBody(req: VercelRequest): Promise<string> {
+    return new Promise((resolve, reject) => {
+        let body = '';
+        req.on('data', (chunk: Buffer) => { body += chunk.toString(); });
+        req.on('end', () => resolve(body));
+        req.on('error', reject);
+    });
+}
 
 async function computeHmac(secret: string, body: string): Promise<string> {
     const encoder = new TextEncoder();
@@ -176,41 +186,43 @@ async function processWebhook(body: string): Promise<void> {
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
-export default async function handler(req: Request): Promise<Response> {
+export default async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {
     if (req.method !== 'POST') {
-        return new Response('Method not allowed', { status: 405 });
+        res.status(405).send('Method not allowed');
+        return;
     }
 
-    const secret = getEnv('LEMON_SQUEEZY_WEBHOOK_SECRET');
-    const body   = await req.text();
-    const sig    = req.headers.get('x-signature') ?? '';
+    const secret  = getEnv('LEMON_SQUEEZY_WEBHOOK_SECRET');
+    const rawBody = await getRawBody(req);
+    const sig     = req.headers['x-signature'] as string ?? '';
 
     if (!secret) {
         console.error('[LS webhook] Missing LEMON_SQUEEZY_WEBHOOK_SECRET env var');
-        return new Response('OK', { status: 200 });
+        res.status(200).send('OK');
+        return;
     }
 
-    const expected = await computeHmac(secret, body);
+    const expected = await computeHmac(secret, rawBody);
     if (expected !== sig) {
         console.error('[LS webhook] Invalid signature — returning 200 silently');
-        return new Response('OK', { status: 200 });
+        res.status(200).send('OK');
+        return;
     }
 
     // Validate JSON before firing async work
     try {
-        JSON.parse(body);
+        JSON.parse(rawBody);
     } catch {
         console.error('[LS webhook] Malformed JSON body');
-        return new Response('OK', { status: 200 });
+        res.status(200).send('OK');
+        return;
     }
 
-    // Return 200 to LS immediately so it does not retry on slow DB operations
-    const response = new Response('OK', { status: 200 });
-
     // Process async without blocking the response
-    processWebhook(body).catch(err =>
+    processWebhook(rawBody).catch(err =>
         console.error('[LS webhook] async processing error:', err instanceof Error ? err.message : String(err))
     );
 
-    return response;
+    // Return 200 to LS immediately so it does not retry on slow DB operations
+    res.status(200).send('OK');
 }
