@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle, RefreshCw, Ban } from 'lucide-react';
+import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle, RefreshCw, Ban, Star } from 'lucide-react';
 import { openLemonSqueezyCheckout } from '@/lib/lemon';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
@@ -212,10 +212,14 @@ function SubscriptionSection() {
                 <div className={`pt-3 border-t border-border/60 grid gap-3 ${isTrial ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                     {isTrial && (
                         <div className="rounded-xl border border-border p-4 flex flex-col gap-2">
-                            <p className="text-xs font-bold uppercase tracking-wider text-brand">Starter — 9€/mois</p>
+                            <div className="flex items-center gap-1">
+                                <Star className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+                                <p className="text-xs font-bold uppercase tracking-wider text-text-primary">Starter — 9€/mois</p>
+                            </div>
                             <ul className="space-y-1 text-xs text-text-secondary flex-1">
-                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />10 projets · 50 documents</li>
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />10 projets · 50 documents · 2 Go</li>
                                 <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />3 signatures FIRMA/mois</li>
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Tous les outils essentiels</li>
                             </ul>
                             <Button
                                 size="sm"
