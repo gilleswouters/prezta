@@ -82,12 +82,29 @@ async function processWebhook(body: string): Promise<void> {
         return;
     }
 
+    console.error('[LS webhook] Step 3: supabaseUrl prefix:', supabaseUrl.substring(0, 30));
+    console.error('[LS webhook] Step 3: serviceRoleKey prefix:', serviceRoleKey.substring(0, 10));
+
     const restBase = `${supabaseUrl}/rest/v1`;
     const authHeaders = {
         'Content-Type':  'application/json',
         'Authorization': `Bearer ${serviceRoleKey}`,
         'apikey':        serviceRoleKey,
     };
+
+    console.error('[LS webhook] Step 3.5: testing Supabase connection');
+    const testResponse = await withTimeout(
+        fetch(`${supabaseUrl}/rest/v1/`, {
+            headers: {
+                'Authorization': `Bearer ${serviceRoleKey}`,
+                'apikey':        serviceRoleKey,
+            },
+        }),
+        5_000,
+        'connection test'
+    );
+    console.error('[LS webhook] Step 3.5 result:', testResponse.status,
+        await testResponse.text().catch(() => 'no body'));
 
     // ── subscription_created / subscription_updated ───────────────────────────
 
