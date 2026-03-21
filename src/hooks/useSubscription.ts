@@ -2,10 +2,9 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
 
-// All LS subscription statuses we want to surface in the UI.
-// 'on_trial' can appear if LS has a trial period configured.
-// 'past_due' / 'paused' still indicate a real paid subscription.
-const ACTIVE_STATUSES = ['active', 'on_trial', 'past_due', 'paused', 'cancelled'] as const;
+// All LS subscription statuses we surface in the UI.
+// Include expired/unpaid so the app can show upgrade prompts for those states.
+const ACTIVE_STATUSES = ['active', 'on_trial', 'past_due', 'paused', 'cancelled', 'unpaid', 'expired'] as const;
 
 export function useSubscription() {
     const { session } = useAuth();
@@ -13,12 +12,17 @@ export function useSubscription() {
     return useQuery({
         queryKey: ['subscription', session?.user.id],
         queryFn: async () => {
-            if (!session?.user.id) return { plan: 'trial', isPro: false, firmaUsed: 0, currentPeriodEnd: null, status: null };
+            if (!session?.user.id) return {
+                plan: 'trial', isPro: false, firmaUsed: 0,
+                currentPeriodEnd: null, status: null,
+                billingCycle: 'monthly', isCancelled: false, isPastDue: false,
+                isExpired: false, isPaused: false, pauseResumesAt: null, hasAccess: false,
+            };
 
-            // Fetch any subscription row — cancelled subs still have a valid end date
+            // Fetch any subscription row — cancelled/expired rows still hold useful UI data
             const { data, error } = await supabase
                 .from('subscriptions')
-                .select('plan, status, firma_signatures_used, firma_reset_month, current_period_end')
+                .select('plan, status, firma_signatures_used, firma_reset_month, current_period_end, cancelled_at, billing_cycle, pause_resumes_at, lemon_squeezy_id')
                 .eq('user_id', session.user.id)
                 .in('status', ACTIVE_STATUSES)
                 .order('created_at', { ascending: false })
@@ -35,8 +39,22 @@ export function useSubscription() {
             const isPro            = plan === 'pro' && status === 'active';
             const firmaUsed        = data?.firma_signatures_used ?? 0;
             const currentPeriodEnd = data?.current_period_end ?? null;
+            const isCancelled      = status === 'cancelled';
+            const isPastDue        = status === 'past_due' || status === 'unpaid';
+            const isExpired        = status === 'expired';
+            const isPaused         = status === 'paused';
+            const pauseResumesAt   = data?.pause_resumes_at ?? null;
+            // hasAccess: active OR cancelled-but-still-in-period for paid plans
+            const hasAccess        = (plan === 'starter' || plan === 'pro') &&
+                (status === 'active' ||
+                 (status === 'cancelled' && !!currentPeriodEnd && new Date(currentPeriodEnd) > new Date()));
 
-            return { plan, isPro, firmaUsed, currentPeriodEnd, status };
+            return {
+                plan, isPro, firmaUsed, currentPeriodEnd, status,
+                billingCycle:  data?.billing_cycle ?? 'monthly',
+                isCancelled, isPastDue, isExpired, isPaused,
+                pauseResumesAt, hasAccess,
+            };
         },
         enabled: !!session?.user.id,
         staleTime: 0,                // always treat cached data as stale — refetch on every focus/interval

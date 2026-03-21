@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle, RefreshCw, Ban, Star } from 'lucide-react';
+import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCircle, XCircle, CreditCard } from 'lucide-react';
 import { openLemonSqueezyCheckout } from '@/lib/lemon';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
@@ -55,14 +55,18 @@ function SubscriptionSection() {
     const queryClient = useQueryClient()
     const { data: subscription } = useSubscription()
 
-    const plan        = subscription?.plan ?? 'trial'
-    const subStatus   = subscription?.status ?? null          // 'active' | 'cancelled' | null
-    const isCancelled = subStatus === 'cancelled'
-    const isActive    = subStatus === 'active'
-    const isPro       = plan === 'pro'
-    const isStarter   = plan === 'starter'
-    const isTrial     = plan === 'trial' || plan === 'free'
-    const isPaid      = isStarter || isPro                    // has a subscription row
+    const plan           = subscription?.plan ?? 'trial'
+    const subStatus      = subscription?.status ?? null
+    const isCancelled    = subscription?.isCancelled  ?? (subStatus === 'cancelled')
+    const isPastDue      = subscription?.isPastDue    ?? (subStatus === 'past_due' || subStatus === 'unpaid')
+    const isExpired      = subscription?.isExpired    ?? (subStatus === 'expired')
+    const isPaused       = subscription?.isPaused     ?? (subStatus === 'paused')
+    const pauseResumesAt = subscription?.pauseResumesAt ?? null
+    const isActive       = subStatus === 'active'
+    const isPro          = plan === 'pro'
+    const isStarter      = plan === 'starter'
+    const isTrial        = plan === 'trial' || plan === 'free'
+    const isPaid         = isStarter || isPro
 
     const [checkoutPending, setCheckoutPending] = useState<'starter' | 'pro' | null>(null)
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -79,7 +83,8 @@ function SubscriptionSection() {
     const formatFR = (iso: string) =>
         new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 
-    const periodEndDate = subscription?.currentPeriodEnd ? formatFR(subscription.currentPeriodEnd) : null
+    const periodEndDate   = subscription?.currentPeriodEnd ? formatFR(subscription.currentPeriodEnd) : null
+    const pauseResumeDate = pauseResumesAt ? formatFR(pauseResumesAt) : null
 
     // Poll for plan upgrade while checkout is open
     useEffect(() => {
@@ -163,6 +168,30 @@ function SubscriptionSection() {
                                 Annulé · Accès jusqu'au{periodEndDate && <strong> {periodEndDate}</strong>}
                             </span>
                         )}
+
+                        {/* Past due — payment failed */}
+                        {isPaid && isPastDue && (
+                            <span className="text-sm text-red-600 font-medium flex items-center gap-1.5">
+                                <CreditCard className="h-3.5 w-3.5 shrink-0" />
+                                Paiement en retard · Mettez à jour votre moyen de paiement
+                            </span>
+                        )}
+
+                        {/* Paused */}
+                        {isPaid && isPaused && (
+                            <span className="text-sm text-violet-600 font-medium flex items-center gap-1.5">
+                                <PauseCircle className="h-3.5 w-3.5 shrink-0" />
+                                En pause{pauseResumeDate && <> · Reprend le <strong>{pauseResumeDate}</strong></>}
+                            </span>
+                        )}
+
+                        {/* Expired */}
+                        {isPaid && isExpired && (
+                            <span className="text-sm text-red-600 font-medium flex items-center gap-1.5">
+                                <XCircle className="h-3.5 w-3.5 shrink-0" />
+                                Expiré · Choisissez un plan pour continuer
+                            </span>
+                        )}
                     </div>
                 </div>
 
@@ -209,8 +238,8 @@ function SubscriptionSection() {
                 </div>
             )}
 
-            {/* Upgrade options — shown for trial, starter (active), or cancelled subs */}
-            {!(isPro && isActive) && !checkoutPending && (
+            {/* Upgrade options — shown for trial, starter, cancelled, expired. Hidden for past_due/paused (use portal). */}
+            {!(isPro && isActive) && !isPastDue && !isPaused && !checkoutPending && (
                 <div className={`pt-3 border-t border-border/60 grid gap-3 ${isTrial ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
                     {isTrial && (
                         <div className="rounded-xl border border-border p-4 flex flex-col gap-2">

@@ -10,6 +10,9 @@ interface LSAttributes {
     variant_name?: string
     product_name?: string
     custom_data?: Record<string, string>
+    trial_ends_at?: string | null
+    cancelled?: boolean
+    pause?: { resumes_at?: string | null }
 }
 
 interface LSPayload {
@@ -21,6 +24,31 @@ interface LSPayload {
         id: string
         attributes: LSAttributes
     }
+}
+
+// ─── Plan / billing helpers ───────────────────────────────────────────────────
+
+function getPlanFromVariant(variantId: string, productName: string, variantName: string): string {
+    const starterMonthly = Deno.env.get('LS_STARTER_MONTHLY_VARIANT_ID') ?? ''
+    const starterAnnual  = Deno.env.get('LS_STARTER_ANNUAL_VARIANT_ID')  ?? ''
+    const proMonthly     = Deno.env.get('LS_PRO_MONTHLY_VARIANT_ID')     ?? ''
+    const proAnnual      = Deno.env.get('LS_PRO_ANNUAL_VARIANT_ID')      ?? ''
+
+    if (variantId && (variantId === starterMonthly || variantId === starterAnnual)) return 'starter'
+    if (variantId && (variantId === proMonthly     || variantId === proAnnual))     return 'pro'
+
+    const name = `${productName} ${variantName}`.toLowerCase()
+    if (name.includes('starter')) return 'starter'
+    if (name.includes('pro'))     return 'pro'
+    return 'starter' // safe default — less harmful than wrongly granting pro
+}
+
+function getBillingCycle(variantId: string): string {
+    const annualIds = [
+        Deno.env.get('LS_STARTER_ANNUAL_VARIANT_ID') ?? '',
+        Deno.env.get('LS_PRO_ANNUAL_VARIANT_ID')     ?? '',
+    ]
+    return (variantId && annualIds.includes(variantId)) ? 'annual' : 'monthly'
 }
 
 // ─── HMAC validation ──────────────────────────────────────────────────────────
@@ -60,53 +88,83 @@ async function processWebhook(payload: LSPayload): Promise<void> {
     console.error('[LS webhook] Step 3: serviceRoleKey prefix:', serviceRoleKey.substring(0, 10))
 
     const supabase = createClient(supabaseUrl, serviceRoleKey, {
-        auth: {
-            autoRefreshToken: false,
-            persistSession:   false,
-        },
+        auth: { autoRefreshToken: false, persistSession: false },
     })
 
-    // ── subscription_created / subscription_updated ───────────────────────────
+    const now = new Date().toISOString()
 
-    if (eventName === 'subscription_created' || eventName === 'subscription_updated') {
+    // ── subscription_created ──────────────────────────────────────────────────
+
+    if (eventName === 'subscription_created') {
         if (!userId) {
-            console.error('[LS webhook] Missing user_id for', eventName, '— full payload:', JSON.stringify(payload))
+            console.error('[LS webhook] Missing user_id for subscription_created — payload:', JSON.stringify(payload))
             return
         }
+        const variantId    = String(attrs.variant_id ?? '')
+        const plan         = getPlanFromVariant(variantId, attrs.product_name ?? '', attrs.variant_name ?? '')
+        const billingCycle = getBillingCycle(variantId)
 
-        // Log raw LS identifiers to diagnose plan mapping issues
-        const variantId = String(attrs.variant_id ?? '')
-        console.error('[LS webhook] variant_id:', variantId)
-        console.error('[LS webhook] variant_name:', attrs.variant_name)
-        console.error('[LS webhook] product_name:', attrs.product_name)
+        console.error('[LS webhook] variant_id:', variantId, 'variant_name:', attrs.variant_name, 'product_name:', attrs.product_name)
+        console.error('[LS webhook] Step 4: upsert subscription_created — plan:', plan, 'billing_cycle:', billingCycle)
 
-        // Primary: match by variant_id against Supabase secrets (reliable, not locale-dependent)
-        // Fallback: string match on product_name / variant_name
-        // Default: 'starter' — safer than defaulting to 'pro' on unknown variants
-        const starterVariantId = Deno.env.get('LS_STARTER_MONTHLY_VARIANT_ID') ?? ''
-        const proVariantId     = Deno.env.get('LS_PRO_MONTHLY_VARIANT_ID') ?? ''
-        const productLower     = (attrs.product_name ?? '').toLowerCase()
-        const variantLower     = (attrs.variant_name ?? '').toLowerCase()
+        const { error } = await supabase.from('subscriptions').upsert({
+            user_id:            userId,
+            plan,
+            status:             'active',
+            billing_cycle:      billingCycle,
+            lemon_squeezy_id:   payload.data.id,
+            variant_id:         variantId,
+            current_period_end: attrs.renews_at,
+            trial_ends_at:      attrs.trial_ends_at ?? null,
+            updated_at:         now,
+        }, { onConflict: 'user_id' })
 
-        const plan =
-            (starterVariantId && variantId === starterVariantId) ? 'starter' :
-            (proVariantId     && variantId === proVariantId)     ? 'pro'     :
-            productLower.includes('starter') || variantLower.includes('starter') ? 'starter' :
-            productLower.includes('pro')     || variantLower.includes('pro')     ? 'pro'     :
-            'starter' // default to starter — less harmful than wrongly granting pro
+        console.error('[LS webhook] Step 5: upsert returned, error:', error?.message ?? 'none')
+        if (error) throw error
 
-        // On creation force 'active' — Prezta manages its own trial, LS trial periods unused
-        const status = eventName === 'subscription_created' ? 'active' : attrs.status
+    // ── subscription_updated ──────────────────────────────────────────────────
 
-        console.error('[LS webhook] Step 4: about to call supabase.from(subscriptions).upsert — plan:', plan, 'status:', status)
+    } else if (eventName === 'subscription_updated') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for subscription_updated — payload:', JSON.stringify(payload))
+            return
+        }
+        const variantId    = String(attrs.variant_id ?? '')
+        const plan         = getPlanFromVariant(variantId, attrs.product_name ?? '', attrs.variant_name ?? '')
+        const billingCycle = getBillingCycle(variantId)
+
+        console.error('[LS webhook] variant_id:', variantId, 'variant_name:', attrs.variant_name, 'product_name:', attrs.product_name)
+
+        // Map LS status + cancelled flag to Prezta status
+        let status = attrs.status
+        let cancelledAt: string | null = null
+        let pauseResumesAt: string | null = null
+
+        if (attrs.cancelled === true && attrs.status === 'active') {
+            // Cancelled but billing period still active — keep access until period end
+            status     = 'cancelled'
+            cancelledAt = now
+        } else if (attrs.status === 'cancelled') {
+            status      = 'cancelled'
+            cancelledAt = attrs.ends_at ?? now
+        } else if (attrs.status === 'paused') {
+            status         = 'paused'
+            pauseResumesAt = attrs.pause?.resumes_at ?? null
+        }
+
+        console.error('[LS webhook] Step 4: upsert subscription_updated — plan:', plan, 'status:', status)
 
         const { error } = await supabase.from('subscriptions').upsert({
             user_id:            userId,
             plan,
             status,
+            billing_cycle:      billingCycle,
             lemon_squeezy_id:   payload.data.id,
+            variant_id:         variantId,
             current_period_end: attrs.renews_at,
-            updated_at:         new Date().toISOString(),
+            cancelled_at:       cancelledAt,
+            pause_resumes_at:   pauseResumesAt,
+            updated_at:         now,
         }, { onConflict: 'user_id' })
 
         console.error('[LS webhook] Step 5: upsert returned, error:', error?.message ?? 'none')
@@ -119,22 +177,116 @@ async function processWebhook(payload: LSPayload): Promise<void> {
             console.error('[LS webhook] Missing user_id for subscription_cancelled')
             return
         }
-
-        console.error('[LS webhook] Step 4: starting update — subscription_cancelled')
+        console.error('[LS webhook] Step 4: update subscription_cancelled — user:', userId)
 
         const { error } = await supabase
             .from('subscriptions')
             .update({
                 status:             'cancelled',
+                cancelled_at:       now,
+                // Keep access until end of billing period — do NOT change plan
                 current_period_end: attrs.ends_at ?? attrs.renews_at,
+                updated_at:         now,
             })
             .eq('user_id', userId)
 
-        if (error) {
-            console.error('[LS webhook] update error:', error.message, error.code)
-            throw error
-        }
+        if (error) { console.error('[LS webhook] update error:', error.message); throw error }
         console.error('[LS webhook] Step 5: complete — subscription_cancelled user:', userId)
+
+    // ── subscription_expired ──────────────────────────────────────────────────
+
+    } else if (eventName === 'subscription_expired') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for subscription_expired')
+            return
+        }
+        console.error('[LS webhook] Step 4: update subscription_expired — user:', userId)
+
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({
+                status:             'expired',
+                plan:               'free',
+                current_period_end: now,
+                updated_at:         now,
+            })
+            .eq('user_id', userId)
+
+        if (error) { console.error('[LS webhook] update error:', error.message); throw error }
+        console.error('[LS webhook] Step 5: complete — subscription_expired user:', userId)
+
+    // ── subscription_paused ───────────────────────────────────────────────────
+
+    } else if (eventName === 'subscription_paused') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for subscription_paused')
+            return
+        }
+        const pauseResumesAt = attrs.pause?.resumes_at ?? null
+        console.error('[LS webhook] Step 4: update subscription_paused — user:', userId, 'resumes_at:', pauseResumesAt)
+
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({ status: 'paused', pause_resumes_at: pauseResumesAt, updated_at: now })
+            .eq('user_id', userId)
+
+        if (error) { console.error('[LS webhook] update error:', error.message); throw error }
+        console.error('[LS webhook] Step 5: complete — subscription_paused user:', userId)
+
+    // ── subscription_unpaused / subscription_resumed ──────────────────────────
+
+    } else if (eventName === 'subscription_unpaused' || eventName === 'subscription_resumed') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for', eventName)
+            return
+        }
+        console.error('[LS webhook] Step 4: update', eventName, '— user:', userId)
+
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({ status: 'active', pause_resumes_at: null, updated_at: now })
+            .eq('user_id', userId)
+
+        if (error) { console.error('[LS webhook] update error:', error.message); throw error }
+        console.error('[LS webhook] Step 5: complete —', eventName, 'user:', userId)
+
+    // ── subscription_payment_failed ───────────────────────────────────────────
+
+    } else if (eventName === 'subscription_payment_failed') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for subscription_payment_failed')
+            return
+        }
+        console.error('[LS webhook] Payment failed for user:', userId)
+
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({ status: 'past_due', updated_at: now })
+            .eq('user_id', userId)
+
+        if (error) { console.error('[LS webhook] update error:', error.message); throw error }
+        console.error('[LS webhook] Step 5: complete — subscription_payment_failed user:', userId)
+
+    // ── subscription_payment_recovered ────────────────────────────────────────
+
+    } else if (eventName === 'subscription_payment_recovered') {
+        if (!userId) {
+            console.error('[LS webhook] Missing user_id for subscription_payment_recovered')
+            return
+        }
+        console.error('[LS webhook] Step 4: update subscription_payment_recovered — user:', userId)
+
+        const { error } = await supabase
+            .from('subscriptions')
+            .update({
+                status:             'active',
+                current_period_end: attrs.renews_at,
+                updated_at:         now,
+            })
+            .eq('user_id', userId)
+
+        if (error) { console.error('[LS webhook] update error:', error.message); throw error }
+        console.error('[LS webhook] Step 5: complete — subscription_payment_recovered user:', userId)
 
     // ── order_created (one-time — à la carte signatures) ─────────────────────
 
@@ -143,7 +295,6 @@ async function processWebhook(payload: LSPayload): Promise<void> {
             console.error('[LS webhook] Missing user_id for order_created')
             return
         }
-
         console.error('[LS webhook] Step 4: starting fetch — order_created')
 
         const { data: row, error: fetchErr } = await supabase
@@ -162,7 +313,7 @@ async function processWebhook(payload: LSPayload): Promise<void> {
 
         const { error: updateErr } = await supabase
             .from('subscriptions')
-            .update({ firma_signatures_used: current + 1 })
+            .update({ firma_signatures_used: current + 1, updated_at: now })
             .eq('user_id', userId)
 
         if (updateErr) {
