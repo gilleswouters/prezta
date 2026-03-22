@@ -29,13 +29,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCircle, XCircle, CreditCard } from 'lucide-react';
 import { openLemonSqueezyCheckout } from '@/lib/lemon';
+import { openPortal } from '@/lib/portal';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 
 // ─── Lemon Squeezy ─────────────────────────────────────────────────────────
 const LS_STARTER_MONTHLY = 'https://prezta.lemonsqueezy.com/checkout/buy/962125e4-80f2-4181-966e-f53763aae63d'
 const LS_PRO_MONTHLY     = 'https://prezta.lemonsqueezy.com/checkout/buy/912fdc98-0a1e-40de-95c8-ffde04fab2a1'
-const LS_CUSTOMER_PORTAL = 'https://app.lemonsqueezy.com/my-orders'
 const POLL_INTERVAL_MS   = 2_000
 const POLL_TIMEOUT_MS    = 30 * 1_000
 
@@ -68,9 +68,17 @@ function SubscriptionSection() {
     const isTrial        = plan === 'trial' || plan === 'free'
     const isPaid         = isStarter || isPro
 
+    const lsId = subscription?.lemonSqueezyId ?? null
+    const [portalLoading,  setPortalLoading]  = useState(false)
     const [checkoutPending, setCheckoutPending] = useState<'starter' | 'pro' | null>(null)
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const pollTimeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    async function handlePortal() {
+        setPortalLoading(true)
+        try { await openPortal(lsId) }
+        finally { setPortalLoading(false) }
+    }
 
     const trialDaysRemaining = user?.created_at
         ? Math.max(0, PLANS.trial.trialDays - Math.floor(
@@ -196,11 +204,18 @@ function SubscriptionSection() {
                 </div>
 
                 {isPaid && (
-                    <Button asChild variant="outline" size="sm" className="shrink-0 text-xs border-border">
-                        <a href={LS_CUSTOMER_PORTAL} target="_blank" rel="noopener noreferrer">
-                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                            Gérer mon abonnement
-                        </a>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 text-xs border-border"
+                        onClick={handlePortal}
+                        disabled={portalLoading}
+                    >
+                        {portalLoading
+                            ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            : <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                        }
+                        Gérer mon abonnement
                     </Button>
                 )}
             </div>

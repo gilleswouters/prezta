@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Outlet, NavLink, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
@@ -10,6 +11,7 @@ import { ChatAssistant } from '@/components/ai/ChatAssistant';
 import { NotificationBell } from './NotificationBell';
 import { PLANS } from '@/lib/plans';
 import { useUIStore } from '@/stores/uiStore';
+import { openPortal } from '@/lib/portal';
 
 export default function AppLayout() {
     const { user, signOut } = useAuth();
@@ -25,6 +27,27 @@ export default function AppLayout() {
         user?.email?.split('@')[0] ||
         'Utilisateur';
 
+    // Subscription status flags
+    const isPastDue    = subscription?.isPastDue   ?? false;
+    const isCancelled  = subscription?.isCancelled ?? false;
+    const isPaused     = subscription?.isPaused    ?? false;
+    const isExpired    = subscription?.isExpired   ?? false;
+    const lsId         = subscription?.lemonSqueezyId ?? null;
+
+    const periodEndDate = subscription?.currentPeriodEnd
+        ? new Date(subscription.currentPeriodEnd).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+        : null;
+    const pauseEndDate = subscription?.pauseResumesAt
+        ? new Date(subscription.pauseResumesAt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+        : null;
+
+    const [portalLoading, setPortalLoading] = useState(false);
+    async function handlePortal() {
+        setPortalLoading(true);
+        try { await openPortal(lsId); }
+        finally { setPortalLoading(false); }
+    }
+
     // Trial banner calculation
     const isTrial = !subscription?.plan || subscription.plan === 'trial' || subscription.plan === 'free';
     const trialDaysTotal = PLANS.trial.trialDays; // 14
@@ -32,7 +55,8 @@ export default function AppLayout() {
     const trialDaysRemaining = accountCreatedAt
         ? Math.max(-1, trialDaysTotal - Math.floor((Date.now() - accountCreatedAt.getTime()) / 86_400_000))
         : null;
-    const showTrialBanner = isTrial && trialDaysRemaining !== null;
+    // Don't show trial banner when the user has an expired paid subscription
+    const showTrialBanner = isTrial && !isExpired && trialDaysRemaining !== null;
 
     // Map route to title
     const getPageTitle = (pathname: string) => {
@@ -222,6 +246,55 @@ export default function AppLayout() {
                             </Link>
                         </div>
                     )
+                )}
+
+                {/* past_due — payment failed */}
+                {isPastDue && (
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200 text-red-800 text-sm font-medium shrink-0">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
+                        Votre paiement a échoué. Mettez à jour votre moyen de paiement.
+                        <button
+                            onClick={handlePortal}
+                            disabled={portalLoading}
+                            className="ml-2 underline font-bold hover:text-red-900 disabled:opacity-50"
+                        >
+                            {portalLoading ? 'Chargement…' : 'Mettre à jour →'}
+                        </button>
+                    </div>
+                )}
+
+                {/* cancelled — still has access until period end */}
+                {isCancelled && (
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200 text-amber-800 text-sm font-medium shrink-0">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+                        Votre abonnement est annulé.{periodEndDate && <> Accès jusqu'au <strong>{periodEndDate}</strong>.</>}
+                        <button
+                            onClick={handlePortal}
+                            disabled={portalLoading}
+                            className="ml-2 underline font-bold hover:text-amber-900 disabled:opacity-50"
+                        >
+                            {portalLoading ? 'Chargement…' : 'Réactiver →'}
+                        </button>
+                    </div>
+                )}
+
+                {/* paused */}
+                {isPaused && (
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-50 border-b border-blue-200 text-blue-800 text-sm font-medium shrink-0">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-blue-500" />
+                        Votre abonnement est en pause.{pauseEndDate && <> Reprend le <strong>{pauseEndDate}</strong>.</>}
+                    </div>
+                )}
+
+                {/* expired — paid plan that lapsed (distinct from trial expiry) */}
+                {isExpired && (
+                    <div className="flex items-center justify-center gap-2 px-4 py-2 bg-red-50 border-b border-red-200 text-red-800 text-sm font-medium shrink-0">
+                        <AlertTriangle className="h-4 w-4 shrink-0 text-red-500" />
+                        Votre abonnement a expiré. Choisissez un plan pour continuer.
+                        <Link to="/profil" className="ml-2 underline font-bold hover:text-red-900">
+                            Choisir un plan →
+                        </Link>
+                    </div>
                 )}
 
                 {/* Page content */}

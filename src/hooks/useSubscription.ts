@@ -17,6 +17,7 @@ export function useSubscription() {
                 currentPeriodEnd: null, status: null,
                 billingCycle: 'monthly', isCancelled: false, isPastDue: false,
                 isExpired: false, isPaused: false, pauseResumesAt: null, hasAccess: false,
+                lemonSqueezyId: null,
             };
 
             // Fetch any subscription row — cancelled/expired rows still hold useful UI data
@@ -51,9 +52,10 @@ export function useSubscription() {
 
             return {
                 plan, isPro, firmaUsed, currentPeriodEnd, status,
-                billingCycle:  data?.billing_cycle ?? 'monthly',
+                billingCycle:    data?.billing_cycle ?? 'monthly',
                 isCancelled, isPastDue, isExpired, isPaused,
                 pauseResumesAt, hasAccess,
+                lemonSqueezyId:  data?.lemon_squeezy_id ?? null,
             };
         },
         enabled: !!session?.user.id,
