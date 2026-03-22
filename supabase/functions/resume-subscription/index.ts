@@ -70,6 +70,30 @@ Deno.serve(async (req: Request) => {
         return json({ error: `LS API error ${lsResponse.status}`, detail: errBody }, 502)
     }
 
+    // ── Update DB directly ────────────────────────────────────────────────────
+
+    const db = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const now = new Date().toISOString()
+    const { error: dbError } = await db
+        .from('subscriptions')
+        .update({
+            status:       'active',
+            cancelled_at: null,
+            updated_at:   now,
+        })
+        .eq('user_id', user.id)
+
+    if (dbError) {
+        console.error('[resume-subscription] DB update error:', dbError.message)
+    } else {
+        console.error('[resume-subscription] DB updated to: active')
+    }
+
     console.error('[resume-subscription] Success — user:', user.id, 'subscription:', lemonSqueezyId)
     return json({ success: true })
 })

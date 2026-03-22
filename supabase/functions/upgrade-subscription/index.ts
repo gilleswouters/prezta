@@ -100,6 +100,29 @@ Deno.serve(async (req: Request) => {
         return json({ error: `LS API error ${lsResponse.status}`, detail: errBody }, 502)
     }
 
-    console.error('[upgrade-subscription] Success — user:', user.id, 'plan:', targetPlan, 'variant:', variantId)
+    // ── Update DB directly (webhook not fired for API-initiated plan changes) ──
+
+    const db = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    const now = new Date().toISOString()
+    const { error: dbError } = await db
+        .from('subscriptions')
+        .update({
+            plan:       targetPlan,
+            variant_id: String(variantId),
+            updated_at: now,
+        })
+        .eq('user_id', user.id)
+
+    if (dbError) {
+        console.error('[upgrade-subscription] DB update error:', dbError.message)
+    } else {
+        console.error('[upgrade-subscription] DB updated to:', targetPlan)
+    }
+
     return json({ success: true, plan: targetPlan })
 })
