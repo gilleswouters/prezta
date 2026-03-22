@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useProfile, useUpdateProfile, useUploadLogo, StorageLimitError } from '@/hooks/useProfile';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useSubscriptionHistory } from '@/hooks/useSubscriptionHistory';
 import { useAuth } from '@/hooks/useAuth';
 import { PLANS } from '@/lib/plans';
 import { profileSchema } from '@/lib/validations/profile';
@@ -27,7 +28,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Loader2, Check, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCircle, XCircle, CreditCard } from 'lucide-react';
+import { Loader2, Check, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCircle, XCircle, CreditCard, ChevronDown, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { openLemonSqueezyCheckout } from '@/lib/lemon';
 import { openPortal } from '@/lib/portal';
@@ -38,6 +39,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 // ─── Lemon Squeezy ─────────────────────────────────────────────────────────
 const LS_STARTER_MONTHLY = 'https://prezta.lemonsqueezy.com/checkout/buy/962125e4-80f2-4181-966e-f53763aae63d'
@@ -75,12 +77,40 @@ function SubscriptionSection() {
     const billingCycle   = subscription?.billingCycle ?? 'monthly'
     const lsId           = subscription?.lemonSqueezyId ?? null
 
+    const { data: history, isLoading: historyLoading } = useSubscriptionHistory()
+
+    // ── Plan / reason label helpers ────────────────────────────────────────────
+
+    function planLabel(p: string): string {
+        if (p === 'pro') return 'Pro ✦'
+        if (p === 'starter') return 'Starter ⭐'
+        return 'Gratuit'
+    }
+
+    function reasonLabel(reason: string | null): string {
+        const map: Record<string, string> = {
+            upgrade:   'Upgrade',
+            downgrade: 'Rétrogradage',
+            cancel:    'Annulation',
+            resume:    'Réactivation',
+            webhook:   'Automatique',
+        }
+        return map[reason ?? ''] ?? 'Changement'
+    }
+
+    function planColor(p: string): string {
+        if (p === 'pro') return 'bg-brand-light text-brand'
+        if (p === 'starter') return 'bg-amber-100 text-amber-700'
+        return 'bg-gray-100 text-gray-500'
+    }
+
     // ── Loading & dialog states ────────────────────────────────────────────────
     const [upgradeLoading,   setUpgradeLoading]   = useState(false)
     const [downgradeLoading, setDowngradeLoading] = useState(false)
     const [cancelLoading,    setCancelLoading]    = useState(false)
     const [resumeLoading,    setResumeLoading]    = useState(false)
     const [portalLoading,    setPortalLoading]    = useState(false)
+    const [upgradeOpen,   setUpgradeOpen]   = useState(false)
     const [cancelOpen,    setCancelOpen]    = useState(false)
     const [downgradeOpen, setDowngradeOpen] = useState(false)
 
@@ -101,6 +131,22 @@ function SubscriptionSection() {
 
     const periodEndDate   = subscription?.currentPeriodEnd ? formatFR(subscription.currentPeriodEnd) : null
     const pauseResumeDate = pauseResumesAt ? formatFR(pauseResumesAt) : null
+
+    function calculateProrata(
+        currentPeriodEnd: string | null,
+        fromPrice: number,
+        toPrice: number,
+    ): { days: number; amount: number } {
+        if (!currentPeriodEnd) return { days: 30, amount: toPrice - fromPrice }
+        const now = new Date()
+        const end = new Date(currentPeriodEnd)
+        const daysRemaining = Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24))
+        const dailyDiff = (toPrice - fromPrice) / 30
+        const amount = Math.round(dailyDiff * Math.max(0, daysRemaining) * 100) / 100
+        return { days: Math.max(0, daysRemaining), amount }
+    }
+
+    const prorata = calculateProrata(subscription?.currentPeriodEnd ?? null, 9, 19)
 
     // ── Action handlers ────────────────────────────────────────────────────────
 
@@ -227,6 +273,56 @@ function SubscriptionSection() {
     // ── JSX ───────────────────────────────────────────────────────────────────
     return (
         <>
+            {/* Upgrade confirmation */}
+            <AlertDialog open={upgradeOpen} onOpenChange={setUpgradeOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Passer au plan Pro ?</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-3 text-sm text-text-secondary">
+                                <p>
+                                    Vous passez de <strong>Starter (9€/mois)</strong> à{' '}
+                                    <strong>Pro (19€/mois)</strong>.
+                                </p>
+                                {billingCycle === 'monthly' ? (
+                                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 space-y-1 text-xs">
+                                        <p className="font-semibold text-blue-800">Facturation au prorata</p>
+                                        {prorata.days > 0 ? (
+                                            <p className="text-blue-700">
+                                                Il reste environ <strong>{prorata.days} jour{prorata.days > 1 ? 's' : ''}</strong> sur votre période en cours.
+                                                Vous serez facturé <strong>~{prorata.amount.toFixed(2).replace('.', ',')} €</strong> aujourd'hui pour cette période,
+                                                puis <strong>19 €/mois</strong> à chaque renouvellement.
+                                            </p>
+                                        ) : (
+                                            <p className="text-blue-700">
+                                                Votre période se renouvelle très prochainement — vous serez facturé{' '}
+                                                <strong>19 €</strong> dès le prochain cycle.
+                                            </p>
+                                        )}
+                                        <p className="text-blue-500">Le montant exact est calculé par Lemon Squeezy.</p>
+                                    </div>
+                                ) : (
+                                    <div className="rounded-lg bg-blue-50 border border-blue-100 p-3 text-xs text-blue-700">
+                                        <p className="font-semibold text-blue-800">Abonnement annuel</p>
+                                        <p>La différence de prix sera calculée au prorata par Lemon Squeezy pour la période restante.</p>
+                                    </div>
+                                )}
+                                <p>Accès immédiat à l'IA complète, aux signatures FIRMA illimitées et aux projets illimités.</p>
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-brand hover:bg-brand-hover text-white"
+                            onClick={handleUpgrade}
+                        >
+                            Confirmer l'upgrade
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* Cancel confirmation */}
             <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
                 <AlertDialogContent>
@@ -411,7 +507,7 @@ function SubscriptionSection() {
                             <Button
                                 size="sm"
                                 className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1"
-                                onClick={handleUpgrade}
+                                onClick={() => setUpgradeOpen(true)}
                                 disabled={upgradeLoading}
                             >
                                 {upgradeLoading
@@ -504,6 +600,46 @@ function SubscriptionSection() {
                         </Button>
                     </div>
                 )}
+
+                {/* ── Subscription history ──────────────────────────────────── */}
+                <Collapsible className="pt-3 border-t border-border/60">
+                    <CollapsibleTrigger className="flex items-center gap-1 text-xs text-text-muted hover:text-text-secondary transition-colors group">
+                        <ChevronDown className="h-3.5 w-3.5 transition-transform group-data-[state=open]:rotate-180" />
+                        Historique des changements
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="mt-3 space-y-2">
+                        {historyLoading ? (
+                            <div className="space-y-2 animate-pulse">
+                                <div className="h-8 bg-gray-100 rounded-lg" />
+                                <div className="h-8 bg-gray-100 rounded-lg" />
+                            </div>
+                        ) : !history || history.length === 0 ? (
+                            <p className="text-xs text-text-muted py-2">
+                                Aucun changement de plan enregistré.
+                            </p>
+                        ) : (
+                            history.map((row, i) => (
+                                <div key={i} className="flex items-center justify-between gap-2 rounded-lg bg-surface px-3 py-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${planColor(row.from_plan)}`}>
+                                            {planLabel(row.from_plan)}
+                                        </span>
+                                        <ArrowRight className="h-3 w-3 text-text-muted shrink-0" />
+                                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${planColor(row.to_plan)}`}>
+                                            {planLabel(row.to_plan)}
+                                        </span>
+                                        <span className="text-[10px] text-text-muted bg-gray-100 px-1.5 py-0.5 rounded-full shrink-0">
+                                            {reasonLabel(row.reason)}
+                                        </span>
+                                    </div>
+                                    <time className="text-[10px] text-text-muted shrink-0">
+                                        {new Intl.DateTimeFormat('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(row.changed_at))}
+                                    </time>
+                                </div>
+                            ))
+                        )}
+                    </CollapsibleContent>
+                </Collapsible>
             </div>
         </>
     )
