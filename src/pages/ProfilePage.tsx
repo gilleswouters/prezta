@@ -27,9 +27,15 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
-import { Loader2, Check, ExternalLink, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCircle, XCircle, CreditCard } from 'lucide-react';
+import { Loader2, Check, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCircle, XCircle, CreditCard } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { openLemonSqueezyCheckout } from '@/lib/lemon';
 import { openPortal } from '@/lib/portal';
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel,
+    AlertDialogContent, AlertDialogDescription,
+    AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 
@@ -66,19 +72,22 @@ function SubscriptionSection() {
     const isPro          = plan === 'pro'
     const isStarter      = plan === 'starter'
     const isTrial        = plan === 'trial' || plan === 'free'
-    const isPaid         = isStarter || isPro
+    const billingCycle   = subscription?.billingCycle ?? 'monthly'
+    const lsId           = subscription?.lemonSqueezyId ?? null
 
-    const lsId = subscription?.lemonSqueezyId ?? null
-    const [portalLoading,  setPortalLoading]  = useState(false)
+    // ── Loading & dialog states ────────────────────────────────────────────────
+    const [upgradeLoading,   setUpgradeLoading]   = useState(false)
+    const [downgradeLoading, setDowngradeLoading] = useState(false)
+    const [cancelLoading,    setCancelLoading]    = useState(false)
+    const [resumeLoading,    setResumeLoading]    = useState(false)
+    const [portalLoading,    setPortalLoading]    = useState(false)
+    const [cancelOpen,    setCancelOpen]    = useState(false)
+    const [downgradeOpen, setDowngradeOpen] = useState(false)
+
+    // ── Checkout polling (trial → new subscription) ───────────────────────────
     const [checkoutPending, setCheckoutPending] = useState<'starter' | 'pro' | null>(null)
     const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const pollTimeoutRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-    async function handlePortal() {
-        setPortalLoading(true)
-        try { await openPortal(lsId) }
-        finally { setPortalLoading(false) }
-    }
 
     const trialDaysRemaining = user?.created_at
         ? Math.max(0, PLANS.trial.trialDays - Math.floor(
@@ -87,14 +96,95 @@ function SubscriptionSection() {
         : PLANS.trial.trialDays
     const trialProgress = Math.round(((PLANS.trial.trialDays - trialDaysRemaining) / PLANS.trial.trialDays) * 100)
 
-    // Format date in French
     const formatFR = (iso: string) =>
         new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
 
     const periodEndDate   = subscription?.currentPeriodEnd ? formatFR(subscription.currentPeriodEnd) : null
     const pauseResumeDate = pauseResumesAt ? formatFR(pauseResumesAt) : null
 
-    // Poll for plan upgrade while checkout is open
+    // ── Action handlers ────────────────────────────────────────────────────────
+
+    async function handleUpgrade() {
+        if (!lsId) return
+        setUpgradeLoading(true)
+        try {
+            const { data, error } = await supabase.functions.invoke<{ success: boolean; error?: string }>(
+                'upgrade-subscription',
+                { body: { lemon_squeezy_id: lsId, target_plan: 'pro', billing_cycle: billingCycle } }
+            )
+            if (error || !data?.success) throw new Error(data?.error ?? 'Erreur inconnue')
+            await queryClient.invalidateQueries({ queryKey: ['subscription'] })
+            toast.success('✦ Bienvenue sur le plan Pro !')
+        } catch {
+            toast.error('Erreur lors de l\'upgrade. Réessayez.')
+        } finally {
+            setUpgradeLoading(false)
+        }
+    }
+
+    async function handleDowngrade() {
+        if (!lsId) return
+        setDowngradeLoading(true)
+        setDowngradeOpen(false)
+        try {
+            const { data, error } = await supabase.functions.invoke<{ success: boolean; error?: string }>(
+                'upgrade-subscription',
+                { body: { lemon_squeezy_id: lsId, target_plan: 'starter', billing_cycle: billingCycle } }
+            )
+            if (error || !data?.success) throw new Error(data?.error ?? 'Erreur inconnue')
+            await queryClient.invalidateQueries({ queryKey: ['subscription'] })
+            toast.success('Plan rétrogradé vers Starter.')
+        } catch {
+            toast.error('Erreur lors du changement de plan. Réessayez.')
+        } finally {
+            setDowngradeLoading(false)
+        }
+    }
+
+    async function handleCancel() {
+        if (!lsId) return
+        setCancelLoading(true)
+        setCancelOpen(false)
+        try {
+            const { data, error } = await supabase.functions.invoke<{ success: boolean; error?: string }>(
+                'cancel-subscription',
+                { body: { lemon_squeezy_id: lsId } }
+            )
+            if (error || !data?.success) throw new Error(data?.error ?? 'Erreur inconnue')
+            await queryClient.invalidateQueries({ queryKey: ['subscription'] })
+            toast.success(`Abonnement annulé. Accès jusqu'au ${periodEndDate ?? 'fin de période'}.`)
+        } catch {
+            toast.error('Erreur lors de l\'annulation. Réessayez.')
+        } finally {
+            setCancelLoading(false)
+        }
+    }
+
+    async function handleResume() {
+        if (!lsId) return
+        setResumeLoading(true)
+        try {
+            const { data, error } = await supabase.functions.invoke<{ success: boolean; error?: string }>(
+                'resume-subscription',
+                { body: { lemon_squeezy_id: lsId } }
+            )
+            if (error || !data?.success) throw new Error(data?.error ?? 'Erreur inconnue')
+            await queryClient.invalidateQueries({ queryKey: ['subscription'] })
+            toast.success('Abonnement réactivé !')
+        } catch {
+            toast.error('Erreur lors de la réactivation. Réessayez.')
+        } finally {
+            setResumeLoading(false)
+        }
+    }
+
+    async function handlePortal() {
+        setPortalLoading(true)
+        try { await openPortal(lsId) }
+        finally { setPortalLoading(false) }
+    }
+
+    // ── Checkout polling (trial → paid via LS overlay) ────────────────────────
     useEffect(() => {
         if (!checkoutPending) return
         const upgraded = (checkoutPending === 'starter' && isStarter && isActive) ||
@@ -129,26 +219,66 @@ function SubscriptionSection() {
         openLemonSqueezyCheckout({
             url,
             userId: user.id,
-            onSuccess: () => {
-                // Overlay closed — invalidate immediately so the next render fetches fresh data.
-                // The polling loop (started below) continues to check every 2 s until the
-                // webhook has updated Supabase (async, ~5–30 s after payment).
-                void queryClient.invalidateQueries({ queryKey: ['subscription'] })
-            },
+            onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['subscription'] }) },
         })
         startPolling(target)
     }
 
+    // ── JSX ───────────────────────────────────────────────────────────────────
     return (
-        <div id="abonnement" className="bg-white rounded-2xl border border-border p-6 space-y-4">
-            {/* Header */}
-            <div className="flex items-start justify-between gap-4">
+        <>
+            {/* Cancel confirmation */}
+            <AlertDialog open={cancelOpen} onOpenChange={setCancelOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Annuler l'abonnement ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Vous garderez l'accès à toutes les fonctionnalités jusqu'au{' '}
+                            <strong>{periodEndDate ?? 'la fin de la période en cours'}</strong>.
+                            Passé cette date, votre compte repassera en essai gratuit.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Garder mon abonnement</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-red-600 hover:bg-red-700 text-white"
+                            onClick={handleCancel}
+                        >
+                            Annuler mon abonnement
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Downgrade confirmation */}
+            <AlertDialog open={downgradeOpen} onOpenChange={setDowngradeOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Rétrograder vers Starter ?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Vous perdrez l'accès à l'IA complète et aux signatures FIRMA illimitées.
+                            Le changement prend effet à la prochaine période de facturation.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Annuler</AlertDialogCancel>
+                        <AlertDialogAction
+                            className="bg-text-primary hover:bg-text-primary/90 text-white"
+                            onClick={handleDowngrade}
+                        >
+                            Rétrograder vers Starter
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <div id="abonnement" className="bg-white rounded-2xl border border-border p-6 space-y-4">
+                {/* ── Header ──────────────────────────────────────────────── */}
                 <div className="space-y-2">
                     <h2 className="text-base font-bold text-text-primary">Abonnement</h2>
                     <div className="flex flex-wrap items-center gap-2">
                         <PlanBadge plan={plan} cancelled={isCancelled} />
 
-                        {/* Trial status */}
                         {isTrial && trialDaysRemaining > 0 && (
                             <span className="text-sm text-amber-700 font-medium">
                                 Essai gratuit · expire dans <strong>{trialDaysRemaining} jour{trialDaysRemaining !== 1 ? 's' : ''}</strong>
@@ -156,151 +286,226 @@ function SubscriptionSection() {
                         )}
                         {isTrial && trialDaysRemaining === 0 && (
                             <span className="text-sm text-red-600 font-medium flex items-center gap-1">
-                                <AlertTriangle className="h-3.5 w-3.5" />
-                                Essai expiré
+                                <AlertTriangle className="h-3.5 w-3.5" />Essai expiré
                             </span>
                         )}
-
-                        {/* Active paid */}
-                        {isPaid && isActive && (
+                        {(isStarter || isPro) && isActive && (
                             <span className="text-sm text-text-secondary flex items-center gap-1.5">
                                 <RefreshCw className="h-3 w-3 text-emerald-500 shrink-0" />
-                                Renouvellement automatique{periodEndDate && <> · <strong>{periodEndDate}</strong></>}
+                                {billingCycle === 'annual' ? 'Annuel' : 'Mensuel'} · Renouvellement
+                                {periodEndDate && <> le <strong>{periodEndDate}</strong></>}
                             </span>
                         )}
-
-                        {/* Cancelled but still has access */}
-                        {isPaid && isCancelled && (
+                        {isCancelled && (
                             <span className="text-sm text-orange-600 font-medium flex items-center gap-1.5">
                                 <Ban className="h-3.5 w-3.5 shrink-0" />
                                 Annulé · Accès jusqu'au{periodEndDate && <strong> {periodEndDate}</strong>}
                             </span>
                         )}
-
-                        {/* Past due — payment failed */}
-                        {isPaid && isPastDue && (
+                        {isPastDue && (
                             <span className="text-sm text-red-600 font-medium flex items-center gap-1.5">
-                                <CreditCard className="h-3.5 w-3.5 shrink-0" />
-                                Paiement en retard · Mettez à jour votre moyen de paiement
+                                <CreditCard className="h-3.5 w-3.5 shrink-0" />Paiement en retard
                             </span>
                         )}
-
-                        {/* Paused */}
-                        {isPaid && isPaused && (
+                        {isPaused && (
                             <span className="text-sm text-violet-600 font-medium flex items-center gap-1.5">
                                 <PauseCircle className="h-3.5 w-3.5 shrink-0" />
                                 En pause{pauseResumeDate && <> · Reprend le <strong>{pauseResumeDate}</strong></>}
                             </span>
                         )}
-
-                        {/* Expired */}
-                        {isPaid && isExpired && (
+                        {isExpired && (
                             <span className="text-sm text-red-600 font-medium flex items-center gap-1.5">
-                                <XCircle className="h-3.5 w-3.5 shrink-0" />
-                                Expiré · Choisissez un plan pour continuer
+                                <XCircle className="h-3.5 w-3.5 shrink-0" />Expiré
                             </span>
                         )}
                     </div>
                 </div>
 
-                {isPaid && (
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="shrink-0 text-xs border-border"
-                        onClick={handlePortal}
-                        disabled={portalLoading}
-                    >
-                        {portalLoading
-                            ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                            : <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                        }
-                        Gérer mon abonnement
-                    </Button>
-                )}
-            </div>
-
-            {/* Trial progress bar */}
-            {isTrial && (
-                <div className="space-y-1.5">
-                    <div className="flex justify-between text-xs text-text-muted">
-                        <span>Jour {PLANS.trial.trialDays - trialDaysRemaining} / {PLANS.trial.trialDays}</span>
-                        <span>{trialDaysRemaining} jour{trialDaysRemaining !== 1 ? 's' : ''} restant{trialDaysRemaining !== 1 ? 's' : ''}</span>
-                    </div>
-                    <div className="h-2 w-full bg-surface2 rounded-full overflow-hidden">
-                        <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${trialProgress}%` }} />
-                    </div>
-                </div>
-            )}
-
-            {/* Firma usage for paid plans */}
-            {isPaid && isActive && (
-                <div className="pt-3 border-t border-border/60 text-sm text-text-secondary">
-                    Signatures FIRMA utilisées ce mois :{' '}
-                    <strong className="text-text-primary">{subscription?.firmaUsed ?? 0}</strong>
-                    {isStarter && ' / 3'}
-                </div>
-            )}
-
-            {/* Checkout pending indicator */}
-            {checkoutPending && (
-                <div className="flex items-center gap-2 text-sm text-brand bg-brand-light rounded-lg px-3 py-2">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
-                    En attente de confirmation de paiement…
-                    <button onClick={stopPolling} className="ml-auto text-text-muted hover:text-text-primary text-xs underline">
-                        Annuler
-                    </button>
-                </div>
-            )}
-
-            {/* Upgrade options — shown for trial, starter, cancelled, expired. Hidden for past_due/paused (use portal). */}
-            {!(isPro && isActive) && !isPastDue && !isPaused && !checkoutPending && (
-                <div className={`pt-3 border-t border-border/60 grid gap-3 ${isTrial ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
-                    {isTrial && (
-                        <div className="rounded-xl border border-border p-4 flex flex-col gap-2">
-                            <div className="flex items-center gap-1">
-                                <Star className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
-                                <p className="text-xs font-bold uppercase tracking-wider text-text-primary">Starter — 9€/mois</p>
-                            </div>
-                            <ul className="space-y-1 text-xs text-text-secondary flex-1">
-                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />10 projets · 50 documents · 2 Go</li>
-                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />3 signatures FIRMA/mois</li>
-                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Tous les outils essentiels</li>
-                            </ul>
-                            <Button
-                                size="sm"
-                                className="w-full bg-text-primary text-white hover:bg-text-primary/90 mt-1"
-                                onClick={() => handleCheckout(LS_STARTER_MONTHLY, 'starter')}
-                            >
-                                Choisir Starter
-                            </Button>
+                {/* Trial progress bar */}
+                {isTrial && (
+                    <div className="space-y-1.5">
+                        <div className="flex justify-between text-xs text-text-muted">
+                            <span>Jour {PLANS.trial.trialDays - trialDaysRemaining} / {PLANS.trial.trialDays}</span>
+                            <span>{trialDaysRemaining} jour{trialDaysRemaining !== 1 ? 's' : ''} restant{trialDaysRemaining !== 1 ? 's' : ''}</span>
                         </div>
-                    )}
-                    <div className="rounded-xl border-2 border-brand p-4 flex flex-col gap-2 relative overflow-hidden">
-                        {!isStarter && (
+                        <div className="h-2 w-full bg-surface2 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${trialProgress}%` }} />
+                        </div>
+                    </div>
+                )}
+
+                {/* Firma usage */}
+                {(isStarter || isPro) && isActive && (
+                    <div className="pt-3 border-t border-border/60 text-sm text-text-secondary">
+                        Signatures FIRMA utilisées ce mois :{' '}
+                        <strong className="text-text-primary">{subscription?.firmaUsed ?? 0}</strong>
+                        {isStarter && ' / 3'}
+                    </div>
+                )}
+
+                {/* Checkout pending (trial → paid via overlay) */}
+                {checkoutPending && (
+                    <div className="flex items-center gap-2 text-sm text-brand bg-brand-light rounded-lg px-3 py-2">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                        En attente de confirmation de paiement…
+                        <button onClick={stopPolling} className="ml-auto text-text-muted hover:text-text-primary text-xs underline">
+                            Annuler
+                        </button>
+                    </div>
+                )}
+
+                {/* ── TRIAL / EXPIRED → checkout cards ────────────────────── */}
+                {(isTrial || isExpired) && !checkoutPending && (
+                    <div className={`pt-3 border-t border-border/60 grid gap-3 ${isTrial ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
+                        {isTrial && (
+                            <div className="rounded-xl border border-border p-4 flex flex-col gap-2">
+                                <div className="flex items-center gap-1">
+                                    <Star className="h-3 w-3 text-amber-500 fill-amber-500 shrink-0" />
+                                    <p className="text-xs font-bold uppercase tracking-wider text-text-primary">Starter — 9€/mois</p>
+                                </div>
+                                <ul className="space-y-1 text-xs text-text-secondary flex-1">
+                                    <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />10 projets · 50 documents · 2 Go</li>
+                                    <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />3 signatures FIRMA/mois</li>
+                                    <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Tous les outils essentiels</li>
+                                </ul>
+                                <Button size="sm" className="w-full bg-text-primary text-white hover:bg-text-primary/90 mt-1" onClick={() => handleCheckout(LS_STARTER_MONTHLY, 'starter')}>
+                                    Choisir Starter
+                                </Button>
+                            </div>
+                        )}
+                        <div className="rounded-xl border-2 border-brand p-4 flex flex-col gap-2 relative overflow-hidden">
                             <div className="absolute top-0 right-0 bg-brand text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">
                                 Recommandé
                             </div>
-                        )}
-                        <div className="flex items-center gap-1">
-                            <Sparkles className="h-3 w-3 text-brand" />
-                            <p className="text-xs font-bold uppercase tracking-wider text-brand">Pro — 19€/mois</p>
+                            <div className="flex items-center gap-1">
+                                <Sparkles className="h-3 w-3 text-brand" />
+                                <p className="text-xs font-bold uppercase tracking-wider text-brand">Pro — 19€/mois</p>
+                            </div>
+                            <ul className="space-y-1 text-xs text-text-secondary flex-1">
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Illimité · FIRMA illimité</li>
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-brand shrink-0" /><span className="font-semibold text-text-primary">IA complète</span></li>
+                            </ul>
+                            <Button size="sm" className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1" onClick={() => handleCheckout(LS_PRO_MONTHLY, 'pro')}>
+                                Passer au Pro
+                            </Button>
                         </div>
-                        <ul className="space-y-1 text-xs text-text-secondary flex-1">
-                            <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Illimité · FIRMA illimité</li>
-                            <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-brand shrink-0" /><span className="font-semibold text-text-primary">IA complète</span></li>
-                        </ul>
+                    </div>
+                )}
+
+                {/* ── ACTIVE STARTER → upgrade + cancel ───────────────────── */}
+                {isStarter && isActive && (
+                    <div className="pt-3 border-t border-border/60 space-y-3">
+                        <div className="rounded-xl border-2 border-brand p-4 space-y-2 relative overflow-hidden">
+                            <div className="absolute top-0 right-0 bg-brand text-white text-[9px] font-bold px-2 py-0.5 rounded-bl-lg uppercase tracking-widest">
+                                Recommandé
+                            </div>
+                            <div className="flex items-center gap-1.5">
+                                <Sparkles className="h-3.5 w-3.5 text-brand" />
+                                <p className="text-xs font-bold uppercase tracking-wider text-brand">Passer au Pro ✦ — 19€/mois</p>
+                            </div>
+                            <ul className="space-y-1 text-xs text-text-secondary">
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-brand shrink-0" /><span className="font-semibold text-text-primary">IA complète</span> — relances, clauses, optimisation</li>
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Signatures FIRMA illimitées</li>
+                                <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Projets & documents illimités</li>
+                            </ul>
+                            <Button
+                                size="sm"
+                                className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1"
+                                onClick={handleUpgrade}
+                                disabled={upgradeLoading}
+                            >
+                                {upgradeLoading
+                                    ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                    : <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                                }
+                                Upgrade vers Pro
+                            </Button>
+                        </div>
+                        <div className="text-center">
+                            <button
+                                onClick={() => setCancelOpen(true)}
+                                disabled={cancelLoading}
+                                className="text-xs text-text-muted hover:text-red-600 underline transition-colors disabled:opacity-50"
+                            >
+                                {cancelLoading ? 'Annulation en cours…' : 'Annuler mon abonnement'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── ACTIVE PRO → downgrade + cancel ─────────────────────── */}
+                {isPro && isActive && (
+                    <div className="pt-3 border-t border-border/60 space-y-3">
+                        <div className="rounded-xl border border-border p-4 space-y-2">
+                            <p className="text-xs font-bold text-text-secondary">Rétrograder vers Starter — 9€/mois</p>
+                            <p className="text-xs text-text-muted">Vous perdrez l'accès à l'IA complète et aux signatures FIRMA illimitées.</p>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-xs border-border"
+                                onClick={() => setDowngradeOpen(true)}
+                                disabled={downgradeLoading}
+                            >
+                                {downgradeLoading && <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />}
+                                Rétrograder
+                            </Button>
+                        </div>
+                        <div className="text-center">
+                            <button
+                                onClick={() => setCancelOpen(true)}
+                                disabled={cancelLoading}
+                                className="text-xs text-text-muted hover:text-red-600 underline transition-colors disabled:opacity-50"
+                            >
+                                {cancelLoading ? 'Annulation en cours…' : 'Annuler mon abonnement'}
+                            </button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── CANCELLED → reactivate ───────────────────────────────── */}
+                {isCancelled && (
+                    <div className="pt-3 border-t border-border/60">
+                        <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 space-y-2">
+                            <p className="text-sm font-semibold text-amber-900">Réactivez votre abonnement</p>
+                            <p className="text-xs text-amber-700">
+                                Votre abonnement reprendra automatiquement et vous retrouverez l'accès à toutes les fonctionnalités.
+                            </p>
+                            <Button
+                                size="sm"
+                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                                onClick={handleResume}
+                                disabled={resumeLoading}
+                            >
+                                {resumeLoading
+                                    ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                    : <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                                }
+                                Réactiver mon abonnement
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
+                {/* ── PAST DUE → update payment via LS portal ──────────────── */}
+                {isPastDue && (
+                    <div className="pt-3 border-t border-border/60">
                         <Button
+                            variant="outline"
                             size="sm"
-                            className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1"
-                            onClick={() => handleCheckout(LS_PRO_MONTHLY, 'pro')}
+                            className="text-xs border-red-200 text-red-700 hover:bg-red-50"
+                            onClick={handlePortal}
+                            disabled={portalLoading}
                         >
-                            Passer au Pro
+                            {portalLoading
+                                ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                : <CreditCard className="h-3.5 w-3.5 mr-1.5" />
+                            }
+                            Mettre à jour ma carte de paiement
                         </Button>
                     </div>
-                </div>
-            )}
-        </div>
+                )}
+            </div>
+        </>
     )
 }
 

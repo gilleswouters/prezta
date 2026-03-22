@@ -42,5 +42,14 @@ verify_jwt = false
 [functions.get-portal-url]
 verify_jwt = false
 
+[functions.upgrade-subscription]
+verify_jwt = false
+
+[functions.cancel-subscription]
+verify_jwt = false
+
+[functions.resume-subscription]
+verify_jwt = false
+
 [functions.send-invoice-reminder]
 verify_jwt = false
