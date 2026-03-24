@@ -166,7 +166,9 @@ export default function OnboardingPage() {
     })
 
     useEffect(() => {
-        if (profileData?.onboarding_completed === true) {
+        // Skip redirect if user was sent here to complete their profile before a paid checkout
+        const hasPendingCheckout = !!sessionStorage.getItem('pendingCheckout')
+        if (profileData?.onboarding_completed === true && !hasPendingCheckout) {
             navigate('/dashboard', { replace: true })
         }
     }, [profileData, navigate])
