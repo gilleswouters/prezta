@@ -9,6 +9,8 @@
  * webhook can identify which user completed the purchase.
  */
 
+import { toast } from 'sonner'
+
 export interface OpenCheckoutOptions {
     /** Base LS variant checkout URL (no ?embed=1 or custom params) */
     url: string
@@ -31,6 +33,7 @@ export function openLemonSqueezyCheckout({ url, userId, onSuccess }: OpenCheckou
         // Guard against SDK init failure — fall back to new-tab if not ready.
         if (!window.LemonSqueezy?.Url?.Open) {
             console.warn('[lemon] SDK init failed — falling back to new tab')
+            toast.info('Ouverture du paiement dans un nouvel onglet...')
             window.open(fallbackUrl, '_blank')
             return
         }
@@ -46,6 +49,7 @@ export function openLemonSqueezyCheckout({ url, userId, onSuccess }: OpenCheckou
         window.LemonSqueezy.Url.Open(checkoutUrl)
     } else {
         // lemon.js not loaded — open in new tab
+        toast.info('Ouverture du paiement dans un nouvel onglet...')
         window.open(fallbackUrl, '_blank')
     }
 }
