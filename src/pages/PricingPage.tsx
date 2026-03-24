@@ -3,7 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Check, X, Sparkles, Zap, Shield, Plus, Minus } from 'lucide-react';
 import { useSubscription } from '@/hooks/useSubscription';
+import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/lib/supabase';
+import { openLemonSqueezyCheckout } from '@/lib/lemon';
+import { isProfileComplete } from '@/lib/profileComplete';
+import { useQueryClient } from '@tanstack/react-query';
 import { PLANS } from '@/lib/plans';
+import type { Profile } from '@/types/profile';
 
 // Lemon Squeezy checkout URLs — variant IDs confirmed in LS dashboard
 // Dashboard → Store → Products → (plan) → Variants → Share link
@@ -49,9 +55,37 @@ function FeatureCell({ value }: { value: string | boolean }) {
 
 export default function PricingPage() {
     const { data: subscription } = useSubscription();
+    const { user } = useAuth();
     const navigate = useNavigate();
+    const queryClient = useQueryClient();
     const [annual, setAnnual] = useState(false);
     const [extraQty, setExtraQty] = useState(1);
+
+    async function handlePaidCheckout(variantUrl: string, planName: 'starter' | 'pro') {
+        if (!user?.id) { navigate('/login'); return }
+
+        const { data } = await supabase
+            .from('profiles')
+            .select('full_name, legal_status, siret_number, address_street, address_city, address_zip')
+            .eq('id', user.id)
+            .maybeSingle()
+
+        if (!isProfileComplete(data as Profile | null)) {
+            sessionStorage.setItem('pendingCheckout', JSON.stringify({
+                variantUrl,
+                planName,
+                userId: user.id,
+            }))
+            navigate('/onboarding', { state: { reason: 'checkout', planName } })
+            return
+        }
+
+        openLemonSqueezyCheckout({
+            url:      variantUrl,
+            userId:   user.id,
+            onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['subscription'] }) },
+        })
+    }
 
     const currentPlan = subscription?.plan ?? 'trial';
     const isPro     = currentPlan === 'pro';
@@ -148,10 +182,11 @@ export default function PricingPage() {
                             Votre plan actuel
                         </div>
                     ) : (
-                        <Button asChild className="w-full bg-text-primary text-white hover:bg-text-primary/90">
-                            <a href={starterUrl} target="_blank" rel="noopener noreferrer">
-                                Choisir Starter
-                            </a>
+                        <Button
+                            className="w-full bg-text-primary text-white hover:bg-text-primary/90"
+                            onClick={() => void handlePaidCheckout(starterUrl, 'starter')}
+                        >
+                            Choisir Starter
                         </Button>
                     )}
                 </div>
@@ -190,10 +225,11 @@ export default function PricingPage() {
                             Vous êtes Pro 🎉
                         </div>
                     ) : (
-                        <Button asChild className="w-full bg-brand text-white hover:bg-brand-hover shadow-md shadow-blue-200">
-                            <a href={proUrl} target="_blank" rel="noopener noreferrer">
-                                Choisir Pro
-                            </a>
+                        <Button
+                            className="w-full bg-brand text-white hover:bg-brand-hover shadow-md shadow-blue-200"
+                            onClick={() => void handlePaidCheckout(proUrl, 'pro')}
+                        >
+                            Choisir Pro
                         </Button>
                     )}
                 </div>

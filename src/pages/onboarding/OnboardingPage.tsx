@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
+import { openLemonSqueezyCheckout } from '@/lib/lemon'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -134,8 +135,13 @@ function Field({
 export default function OnboardingPage() {
     const { user } = useAuth()
     const navigate = useNavigate()
+    const location = useLocation()
     const queryClient = useQueryClient()
     const [step, setStep] = useState(1)
+
+    // FIX 5 — context banner when arriving from a paid checkout gate
+    const fromCheckout = (location.state as { reason?: string; planName?: string } | null)?.reason === 'checkout'
+    const checkoutPlanName = (location.state as { reason?: string; planName?: string } | null)?.planName ?? null
     const [saving, setSaving] = useState(false)
     const [quitOpen, setQuitOpen] = useState(false)
     // null = not waiting; 'starter'|'pro' = waiting for webhook after paid checkout
@@ -228,7 +234,27 @@ export default function OnboardingPage() {
         await saveToProfile({ onboarding_completed: true })
         await queryClient.refetchQueries({ queryKey: ['profile-onboarding', user?.id] })
         await queryClient.invalidateQueries({ queryKey: ['subscription', user?.id] })
-        navigate('/dashboard', { replace: true })
+
+        // FIX 4 — resume pending paid checkout that was blocked by incomplete profile
+        const raw = sessionStorage.getItem('pendingCheckout')
+        if (raw) {
+            sessionStorage.removeItem('pendingCheckout')
+            try {
+                const { variantUrl, userId } = JSON.parse(raw) as { variantUrl: string; userId: string }
+                navigate('/dashboard', { replace: true })
+                setTimeout(() => {
+                    openLemonSqueezyCheckout({
+                        url:      variantUrl,
+                        userId,
+                        onSuccess: () => { void queryClient.invalidateQueries({ queryKey: ['subscription'] }) },
+                    })
+                }, 500)
+            } catch {
+                navigate('/dashboard', { replace: true })
+            }
+        } else {
+            navigate('/dashboard', { replace: true })
+        }
     }
 
     // ── FIX 4: Open LS checkout — overlay first, new-tab fallback ──────────
@@ -367,6 +393,22 @@ export default function OnboardingPage() {
                 </div>
 
                 <div className="bg-white rounded-2xl border border-border shadow-sm p-8">
+                    {/* FIX 5 — context banner when redirected from a paid checkout gate */}
+                    {fromCheckout && (
+                        <div className="mb-5 rounded-xl bg-brand/5 border border-brand/20 px-4 py-3 flex items-start gap-3">
+                            <Sparkles className="h-4 w-4 text-brand shrink-0 mt-0.5" />
+                            <div>
+                                <p className="text-sm font-semibold text-brand">
+                                    Finalisez votre profil pour accéder au plan{' '}
+                                    {checkoutPlanName === 'pro' ? 'Pro ✦' : checkoutPlanName === 'starter' ? 'Starter ⭐' : 'payant'}
+                                </p>
+                                <p className="text-xs text-text-secondary mt-0.5">
+                                    Ces informations sont requises pour émettre des factures conformes. Une fois complétées, votre commande reprendra automatiquement.
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     <ProgressBar current={step} total={4} />
 
                     {/* ── Step 1: Bienvenue ───────────────────────────────── */}

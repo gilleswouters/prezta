@@ -31,6 +31,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Loader2, Check, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCircle, XCircle, CreditCard, ChevronDown, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { openLemonSqueezyCheckout } from '@/lib/lemon';
+import { isProfileComplete } from '@/lib/profileComplete';
 import { openPortal } from '@/lib/portal';
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -62,6 +63,7 @@ function SubscriptionSection() {
     const navigate  = useNavigate()
     const queryClient = useQueryClient()
     const { data: subscription } = useSubscription()
+    const { data: profile } = useProfile()
 
     const plan           = subscription?.plan ?? 'trial'
     const subStatus      = subscription?.status ?? null
@@ -260,8 +262,19 @@ function SubscriptionSection() {
         setCheckoutPending(null)
     }
 
-    function handleCheckout(url: string, target: 'starter' | 'pro') {
-        if (!user?.id) return
+    async function handleCheckout(url: string, target: 'starter' | 'pro') {
+        if (!user?.id) { navigate('/login'); return }
+
+        if (!isProfileComplete(profile ?? null)) {
+            sessionStorage.setItem('pendingCheckout', JSON.stringify({
+                variantUrl: url,
+                planName:   target,
+                userId:     user.id,
+            }))
+            navigate('/onboarding', { state: { reason: 'checkout', planName: target } })
+            return
+        }
+
         openLemonSqueezyCheckout({
             url,
             userId: user.id,
@@ -464,7 +477,7 @@ function SubscriptionSection() {
                                     <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />3 signatures FIRMA/mois</li>
                                     <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Tous les outils essentiels</li>
                                 </ul>
-                                <Button size="sm" className="w-full bg-text-primary text-white hover:bg-text-primary/90 mt-1" onClick={() => handleCheckout(LS_STARTER_MONTHLY, 'starter')}>
+                                <Button size="sm" className="w-full bg-text-primary text-white hover:bg-text-primary/90 mt-1" onClick={() => void handleCheckout(LS_STARTER_MONTHLY, 'starter')}>
                                     Choisir Starter
                                 </Button>
                             </div>
@@ -481,7 +494,7 @@ function SubscriptionSection() {
                                 <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-emerald-500 shrink-0" />Illimité · FIRMA illimité</li>
                                 <li className="flex items-center gap-1.5"><Check className="h-3 w-3 text-brand shrink-0" /><span className="font-semibold text-text-primary">IA complète</span></li>
                             </ul>
-                            <Button size="sm" className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1" onClick={() => handleCheckout(LS_PRO_MONTHLY, 'pro')}>
+                            <Button size="sm" className="w-full bg-brand text-white hover:bg-brand-hover shadow-sm shadow-blue-200 mt-1" onClick={() => void handleCheckout(LS_PRO_MONTHLY, 'pro')}>
                                 Passer au Pro
                             </Button>
                         </div>
