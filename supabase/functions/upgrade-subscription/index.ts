@@ -1,5 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface LSSubscriptionAttributes {
+    status: string
+    variant_id: number
+    cancelled: boolean
+}
+
+interface LSSubscriptionResponse {
+    data: {
+        attributes: LSSubscriptionAttributes
+    }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const CORS_HEADERS = {
@@ -27,6 +41,8 @@ function resolveVariantId(targetPlan: string, billingCycle: string): string | nu
     }
     return null
 }
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1_000
 
 // ─── Handler ──────────────────────────────────────────────────────────────────
 
@@ -70,10 +86,36 @@ Deno.serve(async (req: Request) => {
         return json({ error: `No variant configured for plan=${targetPlan} cycle=${billingCycle}` }, 500)
     }
 
-    // ── Call Lemon Squeezy PATCH ───────────────────────────────────────────────
+    // ── Service-role DB client (used for cooldown check + final update) ────────
+
+    const db = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+
+    // ── Cooldown check — prevent switching more than once per 24 h ────────────
+
+    const { data: currentSub } = await db
+        .from('subscriptions')
+        .select('plan, last_plan_change_at')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+    if (currentSub?.last_plan_change_at && currentSub.plan !== targetPlan) {
+        const msSinceLastChange = Date.now() - new Date(currentSub.last_plan_change_at as string).getTime()
+        if (msSinceLastChange < TWENTY_FOUR_HOURS_MS) {
+            console.error('[upgrade-subscription] Cooldown active — last change:', currentSub.last_plan_change_at)
+            return json({ error: 'Vous avez déjà changé de plan récemment. Attendez 24h.' }, 429)
+        }
+    }
+
+    // ── LS API key ────────────────────────────────────────────────────────────
 
     const lsApiKey = Deno.env.get('LEMON_SQUEEZY_API_KEY') ?? ''
     if (!lsApiKey) return json({ error: 'Server configuration error' }, 500)
+
+    // ── Call Lemon Squeezy PATCH ───────────────────────────────────────────────
 
     const lsResponse = await fetch(
         `https://api.lemonsqueezy.com/v1/subscriptions/${lemonSqueezyId}`,
@@ -96,25 +138,54 @@ Deno.serve(async (req: Request) => {
 
     if (!lsResponse.ok) {
         const errBody = await lsResponse.text()
-        console.error('[upgrade-subscription] LS API error:', lsResponse.status, errBody)
+        console.error('[upgrade-subscription] LS PATCH error:', lsResponse.status, errBody)
         return json({ error: `LS API error ${lsResponse.status}`, detail: errBody }, 502)
     }
 
-    // ── Update DB directly (webhook not fired for API-initiated plan changes) ──
+    // ── Verify LS confirms subscription is active with new variant ────────────
+    // A separate GET is required because PATCH may succeed while payment is
+    // still processing — only 'active' status with the new variant_id means
+    // the upgrade was charged and applied.
 
-    const db = createClient(
-        Deno.env.get('SUPABASE_URL')!,
-        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-        { auth: { autoRefreshToken: false, persistSession: false } }
+    const verifyResponse = await fetch(
+        `https://api.lemonsqueezy.com/v1/subscriptions/${lemonSqueezyId}`,
+        {
+            headers: {
+                'Authorization': `Bearer ${lsApiKey}`,
+                'Accept': 'application/vnd.api+json',
+            },
+        }
     )
+
+    if (!verifyResponse.ok) {
+        console.error('[upgrade-subscription] Verification GET failed:', verifyResponse.status)
+        return json({ error: 'Impossible de vérifier le statut du paiement.' }, 502)
+    }
+
+    const verifyData       = await verifyResponse.json() as LSSubscriptionResponse
+    const confirmedStatus  = verifyData.data.attributes.status
+    const confirmedVariant = String(verifyData.data.attributes.variant_id)
+
+    if (confirmedStatus !== 'active') {
+        console.error('[upgrade-subscription] Payment not confirmed — LS status:', confirmedStatus)
+        return json({ error: 'Paiement requis pour effectuer cet upgrade' }, 402)
+    }
+
+    if (confirmedVariant !== variantId) {
+        console.error('[upgrade-subscription] Variant mismatch — expected:', variantId, 'got:', confirmedVariant)
+        return json({ error: 'Le changement de plan n\'a pas été confirmé par Lemon Squeezy. Réessayez.' }, 502)
+    }
+
+    // ── Update DB — only after LS confirms active + correct variant ───────────
 
     const now = new Date().toISOString()
     const { error: dbError } = await db
         .from('subscriptions')
         .update({
-            plan:       targetPlan,
-            variant_id: String(variantId),
-            updated_at: now,
+            plan:               targetPlan,
+            variant_id:         String(variantId),
+            updated_at:         now,
+            last_plan_change_at: now,
         })
         .eq('user_id', user.id)
 

@@ -1,5 +1,20 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+interface LSSubscriptionAttributes {
+    status: string
+    cancelled: boolean
+}
+
+interface LSSubscriptionResponse {
+    data: {
+        attributes: LSSubscriptionAttributes
+    }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 const CORS_HEADERS = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -63,6 +78,24 @@ Deno.serve(async (req: Request) => {
         const errBody = await lsResponse.text()
         console.error('[cancel-subscription] LS API error:', lsResponse.status, errBody)
         return json({ error: `LS API error ${lsResponse.status}`, detail: errBody }, 502)
+    }
+
+    // ── Verify LS confirms subscription is cancelled ───────────────────────────
+    // Parse the DELETE response body to confirm cancelled === true before
+    // updating the DB — prevents marking as cancelled if LS did not apply it.
+
+    let cancelData: LSSubscriptionResponse
+    try {
+        cancelData = await lsResponse.json() as LSSubscriptionResponse
+    } catch {
+        console.error('[cancel-subscription] Failed to parse LS response body')
+        return json({ error: 'La résiliation n\'a pas pu être vérifiée.' }, 502)
+    }
+
+    const confirmedCancelled = cancelData.data.attributes.cancelled
+    if (!confirmedCancelled) {
+        console.error('[cancel-subscription] LS did not confirm cancellation — cancelled:', confirmedCancelled)
+        return json({ error: 'La résiliation n\'a pas été confirmée par Lemon Squeezy. Réessayez.' }, 502)
     }
 
     // ── Update DB directly ────────────────────────────────────────────────────
