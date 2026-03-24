@@ -137,6 +137,8 @@ export default function OnboardingPage() {
     const navigate = useNavigate()
     const location = useLocation()
     const queryClient = useQueryClient()
+
+    console.log('[onboarding] rendered, pendingCheckout:', sessionStorage.getItem('pendingCheckout'), 'location.state:', location.state)
     const [step, setStep] = useState(1)
 
     // FIX 5 — context banner when arriving from a paid checkout gate
@@ -165,9 +167,12 @@ export default function OnboardingPage() {
         staleTime: 0,
     })
 
+    console.log('[onboarding] onboarding_completed:', profileData?.onboarding_completed)
+
     useEffect(() => {
         // Skip redirect if user was sent here to complete their profile before a paid checkout
         const hasPendingCheckout = !!sessionStorage.getItem('pendingCheckout')
+        console.log('[onboarding] redirect check — onboarding_completed:', profileData?.onboarding_completed, 'hasPendingCheckout:', hasPendingCheckout)
         if (profileData?.onboarding_completed === true && !hasPendingCheckout) {
             navigate('/dashboard', { replace: true })
         }
