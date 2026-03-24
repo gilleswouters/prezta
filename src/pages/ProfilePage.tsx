@@ -263,6 +263,11 @@ function SubscriptionSection() {
     }
 
     async function handleCheckout(url: string, target: 'starter' | 'pro') {
+        console.log('[checkout] starting, variantUrl:', url)
+        console.log('[checkout] profile:', profile)
+        console.log('[checkout] isComplete:', isProfileComplete(profile ?? null))
+        console.log('[checkout] userId:', user?.id)
+
         if (!user?.id) { navigate('/login'); return }
 
         if (!isProfileComplete(profile ?? null)) {
@@ -274,6 +279,10 @@ function SubscriptionSection() {
             navigate('/onboarding', { state: { reason: 'checkout', planName: target } })
             return
         }
+
+        const separator   = url.includes('?') ? '&' : '?'
+        const checkoutUrl = `${url}${separator}checkout[custom][user_id]=${encodeURIComponent(user.id)}&embed=1`
+        console.log('[checkout] checkoutUrl:', checkoutUrl)
 
         openLemonSqueezyCheckout({
             url,

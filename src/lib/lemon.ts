@@ -21,6 +21,9 @@ export interface OpenCheckoutOptions {
 }
 
 export function openLemonSqueezyCheckout({ url, userId, onSuccess }: OpenCheckoutOptions): void {
+    console.log('[lemon] opening checkout, url:', url)
+    console.log('[lemon] LemonSqueezy available:', !!window.LemonSqueezy)
+
     // Build checkout URL: append user_id custom param + embed flag
     const separator   = url.includes('?') ? '&' : '?'
     const checkoutUrl = `${url}${separator}checkout[custom][user_id]=${encodeURIComponent(userId)}&embed=1`
