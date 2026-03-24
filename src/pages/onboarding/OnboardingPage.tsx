@@ -10,6 +10,11 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel,
+    AlertDialogContent, AlertDialogDescription,
+    AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Check, Loader2, Sparkles, ArrowRight, LogOut } from 'lucide-react'
 import { LegalStatus } from '@/types/profile'
 
@@ -132,6 +137,7 @@ export default function OnboardingPage() {
     const queryClient = useQueryClient()
     const [step, setStep] = useState(1)
     const [saving, setSaving] = useState(false)
+    const [quitOpen, setQuitOpen] = useState(false)
     // null = not waiting; 'starter'|'pro' = waiting for webhook after paid checkout
     const [waitingForPayment, setWaitingForPayment] = useState<'starter' | 'pro' | null>(null)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -249,12 +255,8 @@ export default function OnboardingPage() {
     }
 
     // ── FIX 5: Quit handler ────────────────────────────────────────────────
-    const handleQuit = () => {
-        const confirmed = window.confirm(
-            'Quitter la configuration ?\n\nVotre progression sera sauvegardée. Vous pourrez reprendre plus tard depuis votre tableau de bord.'
-        )
-        if (confirmed) navigate('/dashboard', { replace: true })
-    }
+    const handleQuit = () => setQuitOpen(true)
+    const confirmQuit = () => navigate('/dashboard', { replace: true })
 
     // ── Step forms ────────────────────────────────────────────────────────
     const form1 = useForm<Step1Data>({ resolver: zodResolver(step1Schema) })
@@ -332,6 +334,24 @@ export default function OnboardingPage() {
     }
 
     return (
+        <>
+        <AlertDialog open={quitOpen} onOpenChange={setQuitOpen}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Continuer plus tard ?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Votre progression sera sauvegardée. Vous pourrez compléter votre profil plus tard depuis votre tableau de bord.
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                    <AlertDialogCancel>Rester ici</AlertDialogCancel>
+                    <AlertDialogAction onClick={confirmQuit}>
+                        Accéder au tableau de bord
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+
         <div className="min-h-screen bg-surface flex flex-col items-center justify-center py-12 px-4">
             <div className="w-full max-w-lg">
                 {/* Brand + quit button */}
@@ -411,8 +431,7 @@ export default function OnboardingPage() {
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Sélectionner votre statut…" />
                                             </SelectTrigger>
-                                            {/* FIX 2: opaque dropdown */}
-                                            <SelectContent className="bg-white z-[60]">
+                                            <SelectContent className="bg-white z-[100] opacity-100">
                                                 {LEGAL_STATUS_OPTIONS.map(opt => (
                                                     <SelectItem key={opt.value} value={opt.value}>
                                                         {opt.label}
@@ -606,5 +625,6 @@ export default function OnboardingPage() {
                 </div>
             </div>
         </div>
+        </>
     )
 }

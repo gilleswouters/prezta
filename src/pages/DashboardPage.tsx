@@ -50,11 +50,12 @@ export default function DashboardPage() {
         user?.email?.split('@')[0] ||
         'Freelance';
 
-    // Show profile nudge when profile is loaded but incomplete
+    // Show profile nudge when profile is loaded but onboarding not completed, or key fields missing
+    const onboardingIncomplete = profile?.onboarding_completed === false
     const showProfileNudge =
         !profileLoading &&
         !profileBannerDismissed &&
-        (!profile?.full_name || !profile?.legal_status);
+        (onboardingIncomplete || !profile?.full_name || !profile?.legal_status);
 
     if (isLoading || !data) {
         return (
@@ -178,10 +179,10 @@ export default function DashboardPage() {
                     <span className="flex-1">
                         Complétez votre profil pour accéder à toutes les fonctionnalités.{' '}
                         <button
-                            onClick={() => navigate('/profil')}
+                            onClick={() => navigate(onboardingIncomplete ? '/onboarding' : '/profil')}
                             className="font-bold underline hover:text-amber-900"
                         >
-                            Compléter mon profil →
+                            {onboardingIncomplete ? 'Compléter la configuration →' : 'Compléter mon profil →'}
                         </button>
                     </span>
                     <button
