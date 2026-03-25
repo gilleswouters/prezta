@@ -150,6 +150,8 @@ export default function OnboardingPage() {
     const [waitingForPayment, setWaitingForPayment] = useState<'starter' | 'pro' | null>(null)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const pollTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    // Prevent finishOnboarding from running twice (Checkout.Success + poll race)
+    const finishCalledRef = useRef(false)
 
     // ── Safety exit: already completed → dashboard ─────────────────────────
     const { data: profileData } = useQuery({
@@ -237,6 +239,9 @@ export default function OnboardingPage() {
 
     // finishOnboarding: withTrialUpsert=true for free plan, false for paid (webhook handles it)
     const finishOnboarding = async (withTrialUpsert = true) => {
+        // Guard: only run once per page lifecycle (Checkout.Success + poll may race)
+        if (finishCalledRef.current) return
+        finishCalledRef.current = true
         if (withTrialUpsert) await insertTrialSubscription()
         await saveToProfile({ onboarding_completed: true })
         await queryClient.refetchQueries({ queryKey: ['profile-onboarding', user?.id] })
@@ -264,27 +269,20 @@ export default function OnboardingPage() {
         }
     }
 
-    // ── FIX 4: Open LS checkout — overlay first, new-tab fallback ──────────
+    // ── FIX 4: Open LS checkout — delegates to openLemonSqueezyCheckout so
+    //    checkout[custom][user_id] is always included in the URL (BUG 1 fix)
     const openPaidCheckout = (url: string, plan: 'starter' | 'pro') => {
-        if (typeof window.createLemonSqueezy === 'function') {
-            // Option A: Overlay
-            window.createLemonSqueezy()
-            window.LemonSqueezy?.Setup({
-                eventHandler: (event) => {
-                    if (event.event === 'Checkout.Success') {
-                        setWaitingForPayment(null)
-                        void finishOnboarding(false)
-                    }
-                },
-            })
-            window.LemonSqueezy?.Url.Open(`${url}?embed=1`)
-            // Also start polling as safety net (overlay might miss the event)
-            setWaitingForPayment(plan)
-        } else {
-            // Option B: new tab + poll
-            window.open(url, '_blank')
-            setWaitingForPayment(plan)
-        }
+        if (!user?.id) return
+        openLemonSqueezyCheckout({
+            url,
+            userId: user.id,
+            onSuccess: () => {
+                setWaitingForPayment(null)
+                void finishOnboarding(false)
+            },
+        })
+        // Also start polling as safety net (overlay might miss the event)
+        setWaitingForPayment(plan)
     }
 
     // ── FIX 5: Quit handler ────────────────────────────────────────────────
@@ -323,9 +321,21 @@ export default function OnboardingPage() {
             iban:           data.iban ?? null,
         })
         setSaving(false)
-        setStep(4)
+        // BUG 2 fix: if a paid checkout was queued before onboarding, skip plan selection
+        // and resume that checkout directly — avoids opening the LS form twice
+        if (sessionStorage.getItem('pendingCheckout')) {
+            void finishOnboarding(false)
+        } else {
+            setStep(4)
+        }
     }
-    const skipStep3 = () => setStep(4)
+    const skipStep3 = () => {
+        if (sessionStorage.getItem('pendingCheckout')) {
+            void finishOnboarding(false)
+        } else {
+            setStep(4)
+        }
+    }
 
     // ── Payment waiting screen ─────────────────────────────────────────────
     if (waitingForPayment) {
