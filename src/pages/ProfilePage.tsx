@@ -798,14 +798,6 @@ export default function ProfilePage() {
                 limit={limit}
             />
 
-            {/* Subscription section */}
-            <SubscriptionSection />
-
-            {/* Storage Usage */}
-            <div className="bg-white border border-border rounded-xl p-5">
-                <StorageBar />
-            </div>
-
             <Card className="bg-surface border-border">
                 <CardHeader>
                     <CardTitle className="text-2xl font-serif text-text">Profil & Informations Légales</CardTitle>
@@ -1051,6 +1043,14 @@ export default function ProfilePage() {
                     </div>
                 </CardContent>
             </Card>
+
+            {/* Storage Usage */}
+            <div className="bg-white border border-border rounded-xl p-5">
+                <StorageBar />
+            </div>
+
+            {/* Subscription section */}
+            <SubscriptionSection />
         </div>
     );
 }
