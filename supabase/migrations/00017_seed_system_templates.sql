@@ -12,31 +12,31 @@ VALUES
 $$Entre les soussignés :
 
 **Le Prestataire**
-{{my_name}}
-{{my_address}}
-SIRET : {{my_bce}} — TVA : {{my_vat}}
+{{nom_prestataire}}
+{{adresse_prestataire}}
+SIRET : {{siret_prestataire}} — TVA : {{tva_prestataire}}
 (Ci-après dénommé « le Prestataire »)
 
 **Le Client**
-{{client_name}}
-{{client_address}}
+{{nom_client}}
+{{adresse_client}}
 (Ci-après dénommé « le Client »)
 
 Il a été convenu ce qui suit :
 
 ## Article 1 – Objet
 
-Le présent contrat a pour objet de définir les conditions dans lesquelles le Prestataire réalise, pour le compte du Client, la prestation suivante : {{project_name}}.
+Le présent contrat a pour objet de définir les conditions dans lesquelles le Prestataire réalise, pour le compte du Client, la prestation suivante : {{nom_projet}}.
 
 Les modalités détaillées de la prestation (livrables, cahier des charges, planning) sont définies d'un commun accord et peuvent être annexées au présent contrat.
 
 ## Article 2 – Durée
 
-La mission débutera le {{start_date}}. La durée est fixée d'un commun accord entre les parties. Toute prolongation fera l'objet d'un avenant écrit signé des deux parties.
+La mission débutera le {{date_debut}}. La durée est fixée d'un commun accord entre les parties. Toute prolongation fera l'objet d'un avenant écrit signé des deux parties.
 
 ## Article 3 – Prix et modalités de paiement
 
-En contrepartie des prestations réalisées, le Client versera au Prestataire la somme de {{total_price}} € HT.
+En contrepartie des prestations réalisées, le Client versera au Prestataire la somme de {{montant_total}} € HT.
 
 Le paiement sera effectué par virement bancaire sous 30 jours à compter de la réception de chaque facture. Tout retard de paiement entraîne l'application de pénalités de retard conformément à l'article L. 441-10 du Code de commerce, ainsi qu'une indemnité forfaitaire de 40 € pour frais de recouvrement.
 
@@ -70,11 +70,11 @@ Le présent contrat est régi par le droit français. En cas de litige, les part
 
 ---
 
-Fait en deux exemplaires originaux, le {{start_date}}.
+Fait en deux exemplaires originaux, le {{date_debut}}.
 
 **Pour le Prestataire :**                    **Pour le Client :**
 
-{{my_name}}                                    {{client_name}}
+{{nom_prestataire}}                                    {{nom_client}}
 
 Signature :___________________              Signature :___________________$$,
 'FR', 'Prestation de services', TRUE),
@@ -86,21 +86,21 @@ Signature :___________________              Signature :___________________$$,
 $$Entre les soussignés :
 
 **Partie A (Prestataire)**
-{{my_name}}
-{{my_address}}
-SIRET : {{my_bce}}
+{{nom_prestataire}}
+{{adresse_prestataire}}
+SIRET : {{siret_prestataire}}
 (Ci-après dénommée « la Partie A »)
 
 **Partie B (Client)**
-{{client_name}}
-{{client_address}}
+{{nom_client}}
+{{adresse_client}}
 (Ci-après dénommée « la Partie B »)
 
 Ensemble dénommées « les Parties ».
 
 ## Article 1 – Objet et contexte
 
-Les Parties envisagent ou entretiennent une relation d'affaires dans le cadre du projet : {{project_name}}.
+Les Parties envisagent ou entretiennent une relation d'affaires dans le cadre du projet : {{nom_projet}}.
 
 Dans ce contexte, chaque Partie peut être amenée à communiquer à l'autre des informations confidentielles. Le présent accord a pour objet de définir les conditions de protection de ces informations.
 
@@ -132,11 +132,11 @@ Le présent accord est soumis au droit français. Tout litige sera soumis aux tr
 
 ---
 
-Fait en deux exemplaires, le {{start_date}}.
+Fait en deux exemplaires, le {{date_debut}}.
 
 **Partie A :**                                **Partie B :**
 
-{{my_name}}                                    {{client_name}}
+{{nom_prestataire}}                                    {{nom_client}}
 
 Signature :___________________              Signature :___________________$$,
 'FR', 'Accord de confidentialité', TRUE),
@@ -147,7 +147,7 @@ Signature :___________________              Signature :___________________$$,
 'CGV complètes pour freelance : tarifs, délais de paiement, propriété intellectuelle, responsabilité et litiges.',
 $$**CONDITIONS GÉNÉRALES DE VENTE**
 
-{{my_name}} — {{my_address}} — SIRET : {{my_bce}} — TVA : {{my_vat}}
+{{nom_prestataire}} — {{adresse_prestataire}} — SIRET : {{siret_prestataire}} — TVA : {{tva_prestataire}}
 
 (Ci-après « le Prestataire »)
 
@@ -199,7 +199,7 @@ Les présentes CGV sont soumises au droit français. En cas de litige, les parti
 
 ---
 
-Dernière mise à jour : {{start_date}} — {{my_name}}$$,
+Dernière mise à jour : {{date_debut}} — {{nom_prestataire}}$$,
 'FR', 'Conditions Générales de Vente', TRUE),
 
 -- 4. Ordre de mission freelance
@@ -209,17 +209,17 @@ Dernière mise à jour : {{start_date}} — {{my_name}}$$,
 $$**ORDRE DE MISSION N° ___**
 
 **Prestataire :**
-{{my_name}}
-{{my_address}}
-SIRET : {{my_bce}} — TVA : {{my_vat}}
+{{nom_prestataire}}
+{{adresse_prestataire}}
+SIRET : {{siret_prestataire}} — TVA : {{tva_prestataire}}
 
 **Client :**
-{{client_name}}
-{{client_address}}
+{{nom_client}}
+{{adresse_client}}
 
-**Mission :** {{project_name}}
-**Date de début :** {{start_date}}
-**Montant total HT :** {{total_price}} €
+**Mission :** {{nom_projet}}
+**Date de début :** {{date_debut}}
+**Montant total HT :** {{montant_total}} €
 
 ---
 
@@ -237,7 +237,7 @@ Le Prestataire travaille en totale autonomie dans l'organisation de son temps et
 
 ## Article 4 – Rémunération
 
-En contrepartie de la mission, le Client versera au Prestataire la somme de {{total_price}} € HT selon l'échéancier suivant :
+En contrepartie de la mission, le Client versera au Prestataire la somme de {{montant_total}} € HT selon l'échéancier suivant :
 - 30 % à la signature du présent ordre de mission
 - 40 % à mi-parcours (validation intermédiaire)
 - 30 % à la livraison finale et validation
@@ -258,11 +258,11 @@ Le présent ordre de mission est soumis au droit français. Tout litige sera sou
 
 ---
 
-**Bon pour accord — Le {{start_date}}**
+**Bon pour accord — Le {{date_debut}}**
 
 **Le Prestataire :**                          **Le Client :**
 
-{{my_name}}                                    {{client_name}}
+{{nom_prestataire}}                                    {{nom_client}}
 
 Signature :___________________              Signature :___________________$$,
 'FR', 'Mission freelance', TRUE);

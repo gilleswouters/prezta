@@ -59,15 +59,15 @@ export function ContractGenerator({ open, onOpenChange, project, versionOf, vers
         const fullNameWithRole = repName ? `${repName}${repRole}` : '';
 
         const context = {
-            my_name: fullNameWithRole,
-            my_city: profile?.address_city || '',
-            my_bce: profile?.bce_number || profile?.siret_number || '',
-            my_vat: profile?.vat_number || '',
-            client_name: project?.clients?.name || '',
-            client_address: project?.clients?.address || '',
-            project_name: project?.name || '',
-            start_date: 'à convenir',
-            total_price: totalPrice,
+            nom_prestataire: fullNameWithRole,
+            ville_prestataire: profile?.address_city || '',
+            siret_prestataire: profile?.bce_number || profile?.siret_number || '',
+            tva_prestataire: profile?.vat_number || '',
+            nom_client: project?.clients?.name || '',
+            adresse_client: project?.clients?.address || '',
+            nom_projet: project?.name || '',
+            date_debut: 'à convenir',
+            montant_total: totalPrice,
         };
 
         const parsed = parseContractTemplate(template.content, context);

@@ -105,13 +105,13 @@ export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: C
         if (!partiesText && profile) {
             const prestataire = [
                 `**Le Prestataire**`,
-                profile.full_name || '{{my_name}}',
-                profile.address_street ? `${profile.address_street}, ${profile.address_zip} ${profile.address_city}` : '{{my_address}}',
+                profile.full_name || '{{nom_prestataire}}',
+                profile.address_street ? `${profile.address_street}, ${profile.address_zip} ${profile.address_city}` : '{{adresse_prestataire}}',
                 profile.siret_number ? `SIRET : ${profile.siret_number}` : '',
                 profile.vat_number ? `TVA : ${profile.vat_number}` : '',
             ].filter(Boolean).join('\n');
 
-            const defaultParties = `Entre les soussignés :\n\n${prestataire}\n\n**Le Client**\n{{client_name}}\n{{client_address}}\n\nIl a été convenu ce qui suit :`;
+            const defaultParties = `Entre les soussignés :\n\n${prestataire}\n\n**Le Client**\n{{nom_client}}\n{{adresse_client}}\n\nIl a été convenu ce qui suit :`;
             setPartiesText(defaultParties);
         }
         setStep(2);
@@ -247,10 +247,10 @@ export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: C
                                     value={partiesText}
                                     onChange={(e) => setPartiesText(e.target.value)}
                                     className="bg-surface2 border-border font-mono text-xs resize-none min-h-[240px]"
-                                    placeholder="Entre les soussignés :&#10;&#10;**Le Prestataire**&#10;{{my_name}}&#10;..."
+                                    placeholder="Entre les soussignés :&#10;&#10;**Le Prestataire**&#10;{{nom_prestataire}}&#10;..."
                                 />
                                 <p className="text-xs text-text-muted">
-                                    Utilisez les variables : <code className="bg-surface px-1 rounded">{'{{my_name}}'}</code>, <code className="bg-surface px-1 rounded">{'{{client_name}}'}</code>, <code className="bg-surface px-1 rounded">{'{{client_address}}'}</code>
+                                    Utilisez les variables : <code className="bg-surface px-1 rounded">{'{{nom_prestataire}}'}</code>, <code className="bg-surface px-1 rounded">{'{{nom_client}}'}</code>, <code className="bg-surface px-1 rounded">{'{{adresse_client}}'}</code>
                                 </p>
                             </div>
                         )}
@@ -269,7 +269,7 @@ export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: C
                                     />
                                 </div>
                                 <p className="text-xs text-text-muted">
-                                    Vous pouvez utiliser <code className="bg-surface px-1 rounded">{'{{project_name}}'}</code> et <code className="bg-surface px-1 rounded">{'{{start_date}}'}</code>.
+                                    Vous pouvez utiliser <code className="bg-surface px-1 rounded">{'{{nom_projet}}'}</code> et <code className="bg-surface px-1 rounded">{'{{date_debut}}'}</code>.
                                 </p>
                             </div>
                         )}

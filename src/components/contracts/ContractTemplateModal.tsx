@@ -18,13 +18,13 @@ import { ContractBlockEditor } from './ContractBlockEditor';
 const DEFAULT_CONTENT = `Entre les soussignés :
 
 **Le Prestataire**
-{{my_name}}
-{{my_address}}
-SIRET : {{my_bce}} — TVA : {{my_vat}}
+{{nom_prestataire}}
+{{adresse_prestataire}}
+SIRET : {{siret_prestataire}} — TVA : {{tva_prestataire}}
 
 **Le Client**
-{{client_name}}
-{{client_address}}
+{{nom_client}}
+{{adresse_client}}
 
 Il a été convenu ce qui suit :
 
@@ -34,11 +34,11 @@ Décrivez ici l'objet du contrat.
 
 ## Article 2 – Durée
 
-La mission débutera le {{start_date}}.
+La mission débutera le {{date_debut}}.
 
 ## Article 3 – Prix
 
-Montant total : {{total_price}} € HT.
+Montant total : {{montant_total}} € HT.
 `;
 
 interface ContractTemplateModalProps {
@@ -177,20 +177,20 @@ export function ContractTemplateModal({
                                 <PopoverContent className="w-[300px] p-4 text-sm bg-white" align="end">
                                     <div className="space-y-2 font-medium">
                                         <p className="font-bold border-b border-border pb-2 mb-2">Mon profil</p>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{my_name}}`}</code>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{my_address}}`}</code>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{my_city}}`}</code>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{my_bce}}`} (ou SIRET)</code>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-3">{`{{my_vat}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{nom_prestataire}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{adresse_prestataire}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{ville_prestataire}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{siret_prestataire}}`} (ou BCE)</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-3">{`{{tva_prestataire}}`}</code>
 
                                         <p className="font-bold border-b border-border pb-2 mb-2">Le Client</p>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{client_name}}`}</code>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-3">{`{{client_address}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{nom_client}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-3">{`{{adresse_client}}`}</code>
 
                                         <p className="font-bold border-b border-border pb-2 mb-2">Le Projet</p>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{project_name}}`}</code>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{start_date}}`}</code>
-                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px]">{`{{total_price}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{nom_projet}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{date_debut}}`}</code>
+                                        <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px]">{`{{montant_total}}`}</code>
                                     </div>
                                     <p className="text-[10px] text-text-muted mt-4">
                                         Les variables sont remplacées automatiquement lors de la génération d'un contrat pour un projet.

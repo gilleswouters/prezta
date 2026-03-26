@@ -21,8 +21,8 @@ interface ContractVariables {
 export function applyVariables(content: string, vars: ContractVariables): string {
     const { profile, client, project } = vars;
 
-    // ── Prestataire (my_*) ──────────────────────────────────────────────────
-    const myName = profile?.company_name || profile?.full_name || '{{my_name}}';
+    // ── Prestataire (nom_prestataire, adresse_prestataire, …) ───────────────
+    const nomPrestataire = profile?.company_name || profile?.full_name || '{{nom_prestataire}}';
 
     const addressParts = [
         profile?.address_street,
@@ -30,37 +30,37 @@ export function applyVariables(content: string, vars: ContractVariables): string
             ? `${profile.address_zip} ${profile.address_city}`
             : profile?.address_city || null,
     ].filter(Boolean);
-    const myAddress = addressParts.length > 0 ? addressParts.join(', ') : '{{my_address}}';
+    const adressePrestataire = addressParts.length > 0 ? addressParts.join(', ') : '{{adresse_prestataire}}';
 
-    const myCity = profile?.address_city || '{{my_city}}';
-    const myBce = profile?.bce_number || profile?.siret_number || '{{my_bce}}';
-    const myVat = profile?.vat_number || '{{my_vat}}';
+    const villePrestataire = profile?.address_city || '{{ville_prestataire}}';
+    const siretPrestataire = profile?.bce_number || profile?.siret_number || '{{siret_prestataire}}';
+    const tvaPrestataire = profile?.vat_number || '{{tva_prestataire}}';
 
-    // ── Client (client_*) ───────────────────────────────────────────────────
-    const clientName = client?.name || '{{client_name}}';
-    const clientAddress = client?.address || '{{client_address}}';
+    // ── Client (nom_client, adresse_client) ─────────────────────────────────
+    const nomClient = client?.name || '{{nom_client}}';
+    const adresseClient = client?.address || '{{adresse_client}}';
 
-    // ── Projet (project_*) ──────────────────────────────────────────────────
-    const projectName = project?.name || '{{project_name}}';
-    const startDate = project?.start_date
+    // ── Projet (nom_projet, date_debut, montant_total) ───────────────────────
+    const nomProjet = project?.name || '{{nom_projet}}';
+    const dateDebut = project?.start_date
         ? new Date(project.start_date).toLocaleDateString('fr-FR', {
               day: 'numeric',
               month: 'long',
               year: 'numeric',
           })
-        : '{{start_date}}';
-    const totalPrice =
-        project?.total_price != null ? String(project.total_price) : '{{total_price}}';
+        : '{{date_debut}}';
+    const montantTotal =
+        project?.total_price != null ? String(project.total_price) : '{{montant_total}}';
 
     return content
-        .replace(/\{\{my_name\}\}/g, myName)
-        .replace(/\{\{my_address\}\}/g, myAddress)
-        .replace(/\{\{my_city\}\}/g, myCity)
-        .replace(/\{\{my_bce\}\}/g, myBce)
-        .replace(/\{\{my_vat\}\}/g, myVat)
-        .replace(/\{\{client_name\}\}/g, clientName)
-        .replace(/\{\{client_address\}\}/g, clientAddress)
-        .replace(/\{\{project_name\}\}/g, projectName)
-        .replace(/\{\{start_date\}\}/g, startDate)
-        .replace(/\{\{total_price\}\}/g, totalPrice);
+        .replace(/\{\{nom_prestataire\}\}/g, nomPrestataire)
+        .replace(/\{\{adresse_prestataire\}\}/g, adressePrestataire)
+        .replace(/\{\{ville_prestataire\}\}/g, villePrestataire)
+        .replace(/\{\{siret_prestataire\}\}/g, siretPrestataire)
+        .replace(/\{\{tva_prestataire\}\}/g, tvaPrestataire)
+        .replace(/\{\{nom_client\}\}/g, nomClient)
+        .replace(/\{\{adresse_client\}\}/g, adresseClient)
+        .replace(/\{\{nom_projet\}\}/g, nomProjet)
+        .replace(/\{\{date_debut\}\}/g, dateDebut)
+        .replace(/\{\{montant_total\}\}/g, montantTotal);
 }
