@@ -10,7 +10,9 @@ export const projectStep1Schema = z.object({
 // Step 2: Brief & Dates
 export const projectStep2Schema = z.object({
     description: z.string().max(1000, "Maximum 1000 caractères autorisés.").optional().nullable(),
-    status: z.string().refine((val) => Object.values(ProjectStatus).includes(val as ProjectStatus), { message: "Statut invalide" }).optional()
+    status: z.string().refine((val) => Object.values(ProjectStatus).includes(val as ProjectStatus), { message: "Statut invalide" }).optional(),
+    start_date: z.string().optional().nullable(),
+    end_date: z.string().optional().nullable(),
 });
 
 // Step 3: Documents

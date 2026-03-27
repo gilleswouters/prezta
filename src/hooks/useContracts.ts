@@ -3,7 +3,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
 import { toast } from 'sonner';
 import { addDays } from 'date-fns';
-import type { ContractTemplate, ContractTemplateFormData, ProjectContract, ProjectContractFormData } from '@/types/contract';
+import type { ContractTemplate, ContractTemplateFormData, ProjectContract, ProjectContractFormData, ContractCatalogueItem } from '@/types/contract';
 
 export interface ExpiringContractItem {
     id: string;
@@ -232,6 +232,50 @@ export const useExpiringContracts = () => {
         },
         enabled: !!user?.id,
         staleTime: 5 * 60 * 1000,
+    });
+};
+
+// --- CONTRACT CATALOGUE ITEMS ---
+
+export const useContractCatalogueItems = (contractId?: string) => {
+    return useQuery({
+        queryKey: ['contract-catalogue-items', contractId],
+        queryFn: async () => {
+            const { data, error } = await supabase
+                .from('contract_catalogue_items')
+                .select('*')
+                .eq('contract_id', contractId!)
+                .order('created_at');
+            if (error) throw error;
+            return data as ContractCatalogueItem[];
+        },
+        enabled: !!contractId,
+    });
+};
+
+export const useInsertContractCatalogueItems = () => {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: async ({
+            contractId,
+            items,
+        }: {
+            contractId: string;
+            items: Array<{ product_id: string; quantity: number | null; unit_price: number | null; note: string | null }>;
+        }) => {
+            const { error } = await supabase
+                .from('contract_catalogue_items')
+                .insert(items.map(item => ({ ...item, contract_id: contractId })));
+            if (error) throw error;
+        },
+        onSuccess: (_, { contractId }) => {
+            queryClient.invalidateQueries({ queryKey: ['contract-catalogue-items', contractId] });
+        },
+        onError: (error) => {
+            console.error(error);
+            toast.error("Impossible d'enregistrer les prestations.");
+        },
     });
 };
 

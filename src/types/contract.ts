@@ -8,6 +8,103 @@ export interface StatusHistoryEntry {
     at: string; // ISO timestamp
 }
 
+// ── Contract type enum ────────────────────────────────────────────────────────
+
+export type ContractType =
+    | 'prestation_services'
+    | 'regie'
+    | 'maintenance_support'
+    | 'cession_droits'
+    | 'contrat_travail_cdi'
+    | 'contrat_travail_cdd'
+    | 'contrat_alternance';
+
+// ── Clause types ──────────────────────────────────────────────────────────────
+
+export type ClauseCategory =
+    | 'identification'
+    | 'objet'
+    | 'duree'
+    | 'remuneration'
+    | 'paiement'
+    | 'propriete_intellectuelle'
+    | 'confidentialite'
+    | 'non_concurrence'
+    | 'resiliation'
+    | 'livrables'
+    | 'sla'
+    | 'avertissement_juridique'
+    | 'litiges';
+
+export interface ContractClause {
+    id: string;
+    label: string;           // French display label
+    content: string;         // Template text with {{variable}} placeholders
+    required: boolean;
+    category: ClauseCategory;
+    appliesTo: ContractType[];
+    editableByUser: boolean;
+}
+
+// ── Wizard state ──────────────────────────────────────────────────────────────
+
+export interface SelectedCatalogueItem {
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    note: string;
+}
+
+export interface ActiveClause {
+    clauseId: string;
+    enabled: boolean;
+    overriddenContent: string | null; // null = use template default
+}
+
+export interface SLAConfig {
+    heuresSupport: string;         // ex: "9h-18h, lundi-vendredi"
+    tempsReponseUrgent: string;    // ex: "4 heures"
+    tempsReponseStandard: string;  // ex: "24 heures"
+    niveauxCriticite: string[];
+}
+
+export interface ContractMetadata {
+    tjm?: number;
+    forfait?: number;
+    devise: 'EUR' | 'CHF';
+    acomptePercent?: number;
+    penaliteRetardPercent?: number;
+    slaConfig?: SLAConfig;
+    piTransferCondition?: string;
+    nonConcurrenceDureeMonths?: number;
+    nonConcurrenceZone?: string;
+    // Travail fields
+    salaireBase?: number;
+    conventionCollective?: string;
+    periodeEssaiMonths?: number;
+    cddEndDate?: string;
+    alternanceDiplome?: string;
+    alternanceCfa?: string;
+    alternanceMaitreApprentissage?: string;
+}
+
+export interface ContractWizardState {
+    contractType: ContractType | null;
+    clientId: string | null;
+    projectId: string | null;
+    startDate: string | null;
+    endDate: string | null;
+    title: string;
+    reference: string;
+    useCatalogueItems: boolean;
+    catalogueMode: 'project_only' | 'full_catalogue';
+    selectedCatalogueItems: SelectedCatalogueItem[];
+    clauses: ActiveClause[];
+    metadata: ContractMetadata;
+}
+
+// ── DB model types ────────────────────────────────────────────────────────────
+
 export interface ContractTemplate {
     id: string;
     user_id: string | null;
@@ -29,6 +126,9 @@ export interface ProjectContract {
     template_id: string | null;
     title: string;
     content: string;
+    contract_type: ContractType | null;
+    clauses: ActiveClause[];
+    metadata: ContractMetadata;
     status: ContractStatus;
     /** Set when the document is dispatched for signature via Firma. */
     sent_at: string | null;
@@ -46,6 +146,16 @@ export interface ProjectContract {
     expiry_notified_7d: boolean;
     created_at: string;
     updated_at: string;
+}
+
+export interface ContractCatalogueItem {
+    id: string;
+    contract_id: string;
+    product_id: string;
+    quantity: number | null;
+    unit_price: number | null;
+    note: string | null;
+    created_at: string;
 }
 
 export type ContractTemplateFormData = Omit<

@@ -15,7 +15,9 @@ const initialState: Partial<ProjectFormData> = {
     client_id: '',
     description: '',
     status: ProjectStatus.DRAFT,
-    expected_documents: []
+    expected_documents: [],
+    start_date: null,
+    end_date: null,
 };
 
 export const useProjectWizardStore = create<ProjectWizardState>((set) => ({

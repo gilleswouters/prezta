@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { ContractGenerator } from './ContractGenerator';
+import { ContractWizardNew } from './ContractWizardNew';
 import { SendForSignatureModal } from './SendForSignatureModal';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
 import { format, differenceInDays, parseISO } from 'date-fns';
@@ -49,6 +50,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
     const deleteContract = useDeleteProjectContract();
 
     const [generatorOpen, setGeneratorOpen] = useState(false);
+    const [wizardNewOpen, setWizardNewOpen] = useState(false);
     const [contractToDelete, setContractToDelete] = useState<string | null>(null);
     const [signerErrorId, setSignerErrorId] = useState<string | null>(null);
 
@@ -245,13 +247,23 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                 <p className="text-text-muted mb-4">
                                     Aucun contrat généré pour ce projet.
                                 </p>
-                                <Button
-                                    onClick={handleAddContract}
-                                    className="bg-brand text-white hover:bg-brand-hover"
-                                >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Créer le premier contrat
-                                </Button>
+                                <div className="flex gap-2 justify-center">
+                                    <Button
+                                        onClick={handleAddContract}
+                                        variant="outline"
+                                        className="border-border"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Depuis un modèle
+                                    </Button>
+                                    <Button
+                                        onClick={() => setWizardNewOpen(true)}
+                                        className="bg-brand text-white hover:bg-brand-hover"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Assistant guidé
+                                    </Button>
+                                </div>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -458,14 +470,24 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                     );
                                 })}
 
-                                <Button
-                                    onClick={handleAddContract}
-                                    variant="outline"
-                                    className="w-full border-dashed border-2 py-6 border-border hover:border-brand/50 text-text-muted hover:text-brand"
-                                >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    Ajouter un autre contrat
-                                </Button>
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={handleAddContract}
+                                        variant="outline"
+                                        className="flex-1 border-dashed border-2 py-6 border-border hover:border-brand/50 text-text-muted hover:text-brand"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Depuis un modèle
+                                    </Button>
+                                    <Button
+                                        onClick={() => setWizardNewOpen(true)}
+                                        variant="outline"
+                                        className="flex-1 border-dashed border-2 py-6 border-brand/40 hover:border-brand text-brand hover:bg-brand/5"
+                                    >
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        Assistant guidé
+                                    </Button>
+                                </div>
                             </div>
                         )}
                     </div>
@@ -520,6 +542,14 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                 versionOf={pendingVersionOf}
                 version={pendingVersionOf ? pendingVersion : undefined}
             />
+
+            {project?.id && (
+                <ContractWizardNew
+                    open={wizardNewOpen}
+                    onOpenChange={setWizardNewOpen}
+                    projectId={project.id}
+                />
+            )}
 
 
             <AlertDialog

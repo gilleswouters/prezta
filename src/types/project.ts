@@ -24,6 +24,10 @@ export interface Project {
     portal_link: string;
     portal_enabled: boolean;
     portal_expires_at: string | null;
+    /** ISO date string (YYYY-MM-DD) — optional, project may be open-ended */
+    start_date: string | null;
+    /** ISO date string (YYYY-MM-DD) — optional */
+    end_date: string | null;
     created_at: string;
     updated_at: string;
 }

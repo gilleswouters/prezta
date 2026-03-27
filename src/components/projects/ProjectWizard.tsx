@@ -60,6 +60,8 @@ export default function ProjectWizard() {
         resolver: zodResolver(projectStep2Schema),
         defaultValues: {
             description: projectData.description || '',
+            start_date: projectData.start_date || '',
+            end_date: projectData.end_date || '',
         }
     });
 
@@ -132,7 +134,9 @@ export default function ProjectWizard() {
                 client_id: finalClientId,
                 description: projectData.description || null,
                 status: ProjectStatus.DRAFT,
-                expected_documents: documents
+                expected_documents: documents,
+                start_date: projectData.start_date || null,
+                end_date: projectData.end_date || null,
             };
 
             await createProject.mutateAsync(payload);
@@ -272,6 +276,26 @@ export default function ProjectWizard() {
                                         <FormMessage />
                                     </div>
                                 )} />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField control={form2.control} name="start_date" render={({ field }) => (
+                                        <div className="space-y-2">
+                                            <FormLabel>Date de début <span className="text-text-muted text-xs">(optionnel)</span></FormLabel>
+                                            <FormControl>
+                                                <Input type="date" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </div>
+                                    )} />
+                                    <FormField control={form2.control} name="end_date" render={({ field }) => (
+                                        <div className="space-y-2">
+                                            <FormLabel>Date de fin <span className="text-text-muted text-xs">(optionnel)</span></FormLabel>
+                                            <FormControl>
+                                                <Input type="date" className="bg-surface2 border-border" {...field} value={field.value || ''} />
+                                            </FormControl>
+                                            <FormMessage />
+                                        </div>
+                                    )} />
+                                </div>
                             </CardContent>
                             <CardFooter className="flex justify-between">
                                 <Button type="button" variant="outline" onClick={() => setStep(1)} className="border-border hover:bg-surface2">
