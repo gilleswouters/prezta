@@ -30,8 +30,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Loader2, Pencil, Trash2, Search, Star, Sparkles, BarChart2, Lock, FileSpreadsheet } from 'lucide-react';
-import { ImportCatalogueModal } from '@/components/ImportCatalogueModal';
+import { Plus, Loader2, Pencil, Trash2, Search, Star, Sparkles, BarChart2, Lock } from 'lucide-react';
 
 export default function CataloguePage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -50,7 +49,6 @@ export default function CataloguePage() {
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedUnit, setSelectedUnit] = useState<string>('all');
     const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-    const [importModalOpen, setImportModalOpen] = useState(false);
 
     const categories = useMemo(() => {
         const cats = new Set<string>();
@@ -141,10 +139,6 @@ export default function CataloguePage() {
                             IA
                         </Button>
                     )}
-                    <Button variant="outline" onClick={() => setImportModalOpen(true)} className="border-border text-text hover:bg-surface-hover">
-                        <FileSpreadsheet className="mr-2 h-4 w-4" />
-                        Importer (CSV)
-                    </Button>
                     <Button onClick={handleCreateNew} className="bg-p3 text-bg hover:opacity-90">
                         <Plus className="mr-2 h-4 w-4" />
                         Nouvelle Prestation
@@ -315,11 +309,6 @@ export default function CataloguePage() {
             <AiCatalogGenerator
                 open={aiModalOpen}
                 onOpenChange={setAiModalOpen}
-            />
-
-            <ImportCatalogueModal
-                open={importModalOpen}
-                onOpenChange={setImportModalOpen}
             />
 
             {benchmarkProduct && (

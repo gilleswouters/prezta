@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Check, Loader2, Sparkles, ArrowRight, LogOut } from 'lucide-react'
 import { LegalStatus } from '@/types/profile'
+import { ProfessionCombobox } from '@/components/ui/ProfessionCombobox'
 
 // ── Lemon Squeezy checkout URLs ───────────────────────────────────────────────
 const LS_STARTER_MONTHLY = 'https://prezta.lemonsqueezy.com/checkout/buy/962125e4-80f2-4181-966e-f53763aae63d'
@@ -140,6 +141,8 @@ export default function OnboardingPage() {
 
     console.log('[onboarding] rendered, pendingCheckout:', sessionStorage.getItem('pendingCheckout'), 'location.state:', location.state)
     const [step, setStep] = useState(1)
+    const [professionSlug, setProfessionSlug] = useState<string | null>(null)
+    const [professionCustom, setProfessionCustom] = useState('')
 
     // FIX 5 — context banner when arriving from a paid checkout gate
     const fromCheckout = (location.state as { reason?: string; planName?: string } | null)?.reason === 'checkout'
@@ -298,6 +301,20 @@ export default function OnboardingPage() {
         setStep(2)
     }
 
+    // Step 2 (NEW): profession selection — always optional, skip allowed
+    const onStep2Profession = async () => {
+        if (professionSlug) {
+            setSaving(true)
+            await saveToProfile({
+                profession_slug:   professionSlug,
+                profession_custom: professionCustom || null,
+            })
+            setSaving(false)
+        }
+        setStep(3)
+    }
+    const skipStep2Profession = () => setStep(3)
+
     const form2 = useForm<Step2Data>({ resolver: zodResolver(step2Schema) })
     const onStep2 = async (data: Step2Data) => {
         setSaving(true)
@@ -307,7 +324,7 @@ export default function OnboardingPage() {
             country:       'FR',
         })
         setSaving(false)
-        setStep(3)
+        setStep(4)
     }
 
     const form3 = useForm<Step3Data>({ resolver: zodResolver(step3Schema) })
@@ -326,14 +343,14 @@ export default function OnboardingPage() {
         if (sessionStorage.getItem('pendingCheckout')) {
             void finishOnboarding(false)
         } else {
-            setStep(4)
+            setStep(5)
         }
     }
     const skipStep3 = () => {
         if (sessionStorage.getItem('pendingCheckout')) {
             void finishOnboarding(false)
         } else {
-            setStep(4)
+            setStep(5)
         }
     }
 
@@ -426,7 +443,7 @@ export default function OnboardingPage() {
                         </div>
                     )}
 
-                    <ProgressBar current={step} total={4} />
+                    <ProgressBar current={step} total={5} />
 
                     {/* ── Step 1: Bienvenue ───────────────────────────────── */}
                     {step === 1 && (
@@ -466,8 +483,61 @@ export default function OnboardingPage() {
                         </form>
                     )}
 
-                    {/* ── Step 2: Informations légales ────────────────────── */}
+                    {/* ── Step 2: Votre activité (NEW) ────────────────────── */}
                     {step === 2 && (
+                        <div className="space-y-6">
+                            <div className="space-y-1 mb-6">
+                                <h1 className="text-xl font-black text-text-primary">
+                                    Quel est votre métier ?
+                                </h1>
+                                <p className="text-sm text-text-secondary">
+                                    Prezta adaptera votre catalogue de prestations à votre activité.
+                                </p>
+                            </div>
+
+                            <ProfessionCombobox
+                                value={professionSlug}
+                                customValue={professionCustom}
+                                onChange={(slug, custom) => {
+                                    setProfessionSlug(slug)
+                                    setProfessionCustom(custom)
+                                }}
+                                label="Métier principal"
+                                placeholder="Rechercher votre métier…"
+                            />
+
+                            <div className="flex gap-3 pt-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => setStep(1)}
+                                    className="flex-none"
+                                >
+                                    Retour
+                                </Button>
+                                <Button
+                                    type="button"
+                                    onClick={onStep2Profession}
+                                    disabled={saving}
+                                    className="flex-1 bg-brand text-white hover:bg-brand-hover"
+                                >
+                                    {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                                    Suivant <ArrowRight className="h-4 w-4 ml-2" />
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={skipStep2Profession}
+                                    className="text-text-muted hover:text-text-secondary text-sm"
+                                >
+                                    Je le définirai plus tard
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Step 3: Informations légales ────────────────────── */}
+                    {step === 3 && (
                         <form onSubmit={form2.handleSubmit(onStep2)} className="space-y-6">
                             <div className="space-y-1 mb-6">
                                 <h1 className="text-xl font-black text-text-primary">
@@ -526,7 +596,7 @@ export default function OnboardingPage() {
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => setStep(1)}
+                                    onClick={() => setStep(2)}
                                     className="flex-1"
                                 >
                                     Retour
@@ -539,8 +609,8 @@ export default function OnboardingPage() {
                         </form>
                     )}
 
-                    {/* ── Step 3: Coordonnées ─────────────────────────────── */}
-                    {step === 3 && (
+                    {/* ── Step 4: Coordonnées ─────────────────────────────── */}
+                    {step === 4 && (
                         <form onSubmit={form3.handleSubmit(onStep3)} className="space-y-5">
                             <div className="space-y-1 mb-6">
                                 <h1 className="text-xl font-black text-text-primary">Coordonnées</h1>
@@ -578,7 +648,7 @@ export default function OnboardingPage() {
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => setStep(2)}
+                                    onClick={() => setStep(3)}
                                 >
                                     Retour
                                 </Button>
@@ -598,8 +668,8 @@ export default function OnboardingPage() {
                         </form>
                     )}
 
-                    {/* ── Step 4: Choisir un plan ─────────────────────────── */}
-                    {step === 4 && (
+                    {/* ── Step 5: Choisir un plan ─────────────────────────── */}
+                    {step === 5 && (
                         <div className="space-y-4">
                             <div className="space-y-1 mb-6">
                                 <h1 className="text-xl font-black text-text-primary">Choisir un plan</h1>

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { productSchema } from '@/lib/validations/product';
@@ -6,6 +6,7 @@ import type { ProductFormValues } from '@/lib/validations/product';
 import { Unit, TVA_RATES } from '@/types/product';
 import type { Product } from '@/types/product';
 import { useCreateProduct, useUpdateProduct } from '@/hooks/useProducts';
+import { ProfessionLibraryTab } from './ProfessionLibraryTab';
 
 const PRODUCT_CATEGORIES = ['Développement', 'Design', 'Conseil', 'Formation', 'Maintenance', 'Autre'] as const;
 import { useProfile } from '@/hooks/useProfile';
@@ -42,6 +43,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
     const createProduct = useCreateProduct();
     const updateProduct = useUpdateProduct();
     const { data: profile } = useProfile();
+    const [activeTab, setActiveTab] = useState<'manual' | 'library'>('manual');
 
     const isEditing = !!product;
     const userCountry = profile?.country || Country.BE;
@@ -62,6 +64,10 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
     const { watch, reset } = form;
     const currentPrice = watch('unit_price') || 0;
     const currentTva = watch('tva_rate') || 0;
+
+    useEffect(() => {
+        if (open) setActiveTab('manual');
+    }, [open]);
 
     useEffect(() => {
         if (product && open) {
@@ -116,10 +122,39 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 <DialogHeader>
                     <DialogTitle className="font-serif text-xl">{isEditing ? 'Modifier la prestation' : 'Nouvelle prestation'}</DialogTitle>
                     <DialogDescription className="text-text-muted">
-                        Configurez le prix, la TVA et l'unité de facturation.
+                        {isEditing
+                            ? 'Modifiez les informations de cette prestation.'
+                            : 'Créez une prestation ou importez depuis votre bibliothèque métier.'}
                     </DialogDescription>
                 </DialogHeader>
 
+                {/* Tabs — only shown when creating */}
+                {!isEditing && (
+                    <div className="flex gap-0 border-b border-border -mx-6 px-6">
+                        {(['manual', 'library'] as const).map(tab => (
+                            <button
+                                key={tab}
+                                type="button"
+                                onClick={() => setActiveTab(tab)}
+                                className={`px-4 py-2 text-sm font-semibold border-b-2 transition-colors -mb-px ${
+                                    activeTab === tab
+                                        ? 'border-brand text-brand'
+                                        : 'border-transparent text-text-muted hover:text-text'
+                                }`}
+                            >
+                                {tab === 'manual' ? 'Créer manuellement' : 'Depuis ma bibliothèque'}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
+                {/* Library tab content */}
+                {!isEditing && activeTab === 'library' && (
+                    <ProfessionLibraryTab onImported={() => onOpenChange(false)} />
+                )}
+
+                {/* Manual form */}
+                {(isEditing || activeTab === 'manual') && (
                 <Form {...form}>
                     <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
 
@@ -234,6 +269,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
 
                     </form>
                 </Form>
+                )}
             </DialogContent>
         </Dialog>
     );

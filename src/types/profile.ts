@@ -45,6 +45,9 @@ export interface Profile {
     last_seasonality_alert_sent_at: string | null;
     // Onboarding completion flag (migration 00034)
     onboarding_completed: boolean;
+    // Profession (migration 00040)
+    profession_slug: string | null;
+    profession_custom: string | null;
 }
 
 // Omit database generated fields for the form mapping

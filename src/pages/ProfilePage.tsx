@@ -32,6 +32,7 @@ import { Loader2, Check, Sparkles, AlertTriangle, RefreshCw, Ban, Star, PauseCir
 import { supabase } from '@/lib/supabase';
 import { openLemonSqueezyCheckout } from '@/lib/lemon';
 import { isProfileComplete } from '@/lib/profileComplete';
+import { ProfessionCombobox } from '@/components/ui/ProfessionCombobox';
 import { openPortal } from '@/lib/portal';
 import {
     AlertDialog, AlertDialogAction, AlertDialogCancel,
@@ -729,7 +730,9 @@ export default function ProfilePage() {
             address_zip: '',
             logo_url: '',
             legal_representative_name: '',
-            legal_representative_role: ''
+            legal_representative_role: '',
+            profession_slug: '',
+            profession_custom: '',
         }
     });
 
@@ -752,7 +755,9 @@ export default function ProfilePage() {
                 address_zip: profile.address_zip || '',
                 logo_url: profile.logo_url || '',
                 legal_representative_name: profile.legal_representative_name || '',
-                legal_representative_role: profile.legal_representative_role || ''
+                legal_representative_role: profile.legal_representative_role || '',
+                profession_slug: profile.profession_slug || '',
+                profession_custom: profile.profession_custom || '',
             });
         }
     }, [profile, reset]);
@@ -835,6 +840,16 @@ export default function ProfilePage() {
                                         </div>
                                     )} />
                                 </div>
+
+                                {/* Profession field */}
+                                <ProfessionCombobox
+                                    value={form.watch('profession_slug') || null}
+                                    customValue={form.watch('profession_custom') || ''}
+                                    onChange={(slug, custom) => {
+                                        form.setValue('profession_slug', slug ?? '');
+                                        form.setValue('profession_custom', custom);
+                                    }}
+                                />
                             </div>
 
                             {/* === ENTREPRISE === */}
