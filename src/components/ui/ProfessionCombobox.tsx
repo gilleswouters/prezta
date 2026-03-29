@@ -39,10 +39,10 @@ export function ProfessionCombobox({
         : professions?.find(p => p.slug === value)?.nom ?? null;
 
     // Filter professions based on search
-    const filteredGroups = new Map<string, typeof professions[number][]>();
+    const filteredGroups = new Map<string, ProfessionTemplate[]>();
     if (professions) {
         for (const [cat, profs] of grouped.entries()) {
-            const filtered = profs.filter(p =>
+            const filtered = profs.filter((p: ProfessionTemplate) =>
                 p.nom.toLowerCase().includes(search.toLowerCase()) ||
                 cat.toLowerCase().includes(search.toLowerCase()),
             );

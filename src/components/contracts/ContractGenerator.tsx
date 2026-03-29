@@ -90,6 +90,9 @@ export function ContractGenerator({ open, onOpenChange, project, versionOf, vers
             status: 'draft',
             version: versionNum,
             version_of: versionOf ?? null,
+            metadata: {},
+            contract_type: 'prestation_services',
+            clauses: [],
         });
 
         trackEvent('contract_sent');
