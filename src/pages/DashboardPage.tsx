@@ -58,6 +58,35 @@ export default function DashboardPage() {
         !profileBannerDismissed &&
         (onboardingIncomplete || !profile?.full_name || !profile?.legal_status);
 
+    // Merge overdue + urgent tasks, dedupe, sort by due_date asc, cap at 5
+    // Must be before any early return to satisfy Rules of Hooks
+    const planningTasks = useMemo(() => {
+        const urgentTasksData = data?.urgentTasks ?? [];
+        const overdueTasksData = data?.overdueTasks ?? [];
+        const seen = new Set<string>();
+        const combined: Array<{
+            id: string;
+            title: string;
+            due_date: string;
+            projectName: string | null;
+            projectId: string | null;
+            badge: 'En retard' | 'Urgent';
+        }> = [];
+        for (const t of overdueTasksData) {
+            if (!seen.has(t.id)) {
+                seen.add(t.id);
+                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'En retard' });
+            }
+        }
+        for (const t of urgentTasksData) {
+            if (!seen.has(t.id)) {
+                seen.add(t.id);
+                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'Urgent' });
+            }
+        }
+        return combined.sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 5);
+    }, [data?.urgentTasks, data?.overdueTasks]);
+
     if (isLoading || !data) {
         return (
             <div className="space-y-8 animate-pulse">
@@ -76,32 +105,6 @@ export default function DashboardPage() {
     }
 
     const { kpi, overdueInvoices, unsignedContracts, urgentTasks, overdueTasks, recentProjects, staleSignedDocs, viewedQuotes, expiringContracts } = data;
-
-    // Merge overdue + urgent tasks, dedupe, sort by due_date asc, cap at 5
-    const planningTasks = useMemo(() => {
-        const seen = new Set<string>();
-        const combined: Array<{
-            id: string;
-            title: string;
-            due_date: string;
-            projectName: string | null;
-            projectId: string | null;
-            badge: 'En retard' | 'Urgent';
-        }> = [];
-        for (const t of overdueTasks) {
-            if (!seen.has(t.id)) {
-                seen.add(t.id);
-                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'En retard' });
-            }
-        }
-        for (const t of urgentTasks) {
-            if (!seen.has(t.id)) {
-                seen.add(t.id);
-                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'Urgent' });
-            }
-        }
-        return combined.sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 5);
-    }, [urgentTasks, overdueTasks]);
 
     // Build the "Actions Requises" list from hook data
     type ActionItem = {
