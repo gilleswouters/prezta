@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,8 +18,8 @@ import {
     CheckCircle2,
     X,
     UserCircle,
-    ListTodo,
 } from 'lucide-react';
+import { KanbanBoard } from '@/components/planning/KanbanBoard';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -57,35 +57,6 @@ export default function DashboardPage() {
         !profileLoading &&
         !profileBannerDismissed &&
         (onboardingIncomplete || !profile?.full_name || !profile?.legal_status);
-
-    // Merge overdue + urgent tasks, dedupe, sort by due_date asc, cap at 5
-    // Must be before any early return to satisfy Rules of Hooks
-    const planningTasks = useMemo(() => {
-        const urgentTasksData = data?.urgentTasks ?? [];
-        const overdueTasksData = data?.overdueTasks ?? [];
-        const seen = new Set<string>();
-        const combined: Array<{
-            id: string;
-            title: string;
-            due_date: string;
-            projectName: string | null;
-            projectId: string | null;
-            badge: 'En retard' | 'Urgent';
-        }> = [];
-        for (const t of overdueTasksData) {
-            if (!seen.has(t.id)) {
-                seen.add(t.id);
-                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'En retard' });
-            }
-        }
-        for (const t of urgentTasksData) {
-            if (!seen.has(t.id)) {
-                seen.add(t.id);
-                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'Urgent' });
-            }
-        }
-        return combined.sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 5);
-    }, [data?.urgentTasks, data?.overdueTasks]);
 
     if (isLoading || !data) {
         return (
@@ -259,50 +230,17 @@ export default function DashboardPage() {
                 />
             </div>
 
-            {/* Planning — Prochaines tâches inline */}
+            {/* Kanban Planning */}
             <div className="bg-white border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
-                <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
+                <div className="px-6 py-4 border-b border-[var(--border)]">
                     <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-2">
-                        <ListTodo className="h-4 w-4 text-violet-500" />
-                        Planning — Prochaines tâches
+                        <FolderKanban className="h-4 w-4 text-violet-500" />
+                        Planning
                     </h2>
-                    <Button variant="ghost" size="sm" className="text-xs h-7 text-[var(--brand)] hover:text-[var(--brand-hover)]" onClick={() => navigate('/planning')}>
-                        Voir le planning <ArrowRight className="h-3 w-3 ml-1" />
-                    </Button>
+                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Vue Kanban de toutes vos tâches.</p>
                 </div>
-                <div className="divide-y divide-[var(--border)]">
-                    {planningTasks.length > 0 ? (
-                        planningTasks.map(task => (
-                            <div
-                                key={task.id}
-                                onClick={() => goToProject(task.projectId)}
-                                className="px-6 py-3 flex items-center justify-between hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group"
-                            >
-                                <div className="flex-1 min-w-0 pr-4">
-                                    <p className="text-sm font-medium text-[var(--text-primary)] truncate group-hover:text-[var(--brand)] transition-colors">{task.title}</p>
-                                    <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)]">
-                                        {task.projectName && <span>{task.projectName}</span>}
-                                        {task.projectName && <span>·</span>}
-                                        <span>Éch. {format(parseISO(task.due_date), 'dd MMM', { locale: fr })}</span>
-                                    </div>
-                                </div>
-                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border shrink-0 ${
-                                    task.badge === 'En retard'
-                                        ? 'bg-red-50 text-red-600 border-red-100'
-                                        : 'bg-amber-50 text-amber-600 border-amber-100'
-                                }`}>
-                                    {task.badge}
-                                </span>
-                            </div>
-                        ))
-                    ) : (
-                        <div className="p-8 text-center text-[var(--text-muted)] text-sm">
-                            <div className="h-10 w-10 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                                <CheckCircle2 className="h-5 w-5" />
-                            </div>
-                            Aucune tâche urgente. Tout est à jour !
-                        </div>
-                    )}
+                <div className="p-4">
+                    <KanbanBoard />
                 </div>
             </div>
 

@@ -28,7 +28,6 @@ import { Toaster } from '@/components/ui/sonner'
 
 // Heavy pages — code-split to reduce main bundle size
 const TimesheetPage        = lazy(() => import('@/pages/TimesheetPage'))
-const PlanningPage         = lazy(() => import('@/pages/PlanningPage'))
 const RevenueDashboardPage = lazy(() => import('@/pages/RevenueDashboardPage'))
 const ExportComptablePage  = lazy(() => import('@/pages/ExportComptablePage'))
 const ContractTemplatesPage = lazy(() => import('@/pages/ContractTemplatesPage'))
@@ -82,7 +81,6 @@ function App() {
                 <Route path="/projets/:id/devis" element={<QuoteBuilderPage />} />
                 <Route path="/parametres/emails" element={<ParametresEmailsPage />} />
                 <Route path="/parametres/abonnement" element={<Navigate to="/profil#abonnement" replace />} />
-                <Route path="/planning" element={<PlanningPage />} />
                 <Route path="/calculateur" element={<Navigate to="/catalogue?tab=calculateur" replace />} />
                 <Route path="/revenus" element={<RevenueDashboardPage />} />
                 <Route path="/export-comptable" element={<ExportComptablePage />} />

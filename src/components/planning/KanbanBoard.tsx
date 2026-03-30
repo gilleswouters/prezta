@@ -1,11 +1,21 @@
-// Deprecated — Kanban embedded directly in DashboardPage via src/components/planning/KanbanBoard.tsx
 import { useState } from 'react';
 import { useTasks } from '@/hooks/useTasks';
 import { useProjects } from '@/hooks/useProjects';
 import type { Task, TaskStatus, TaskPriority } from '@/types/task';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useTimerStore } from '@/stores/timerStore';
 import { Plus, ChevronLeft, ChevronRight, Play, AlertTriangle } from 'lucide-react';
@@ -40,16 +50,15 @@ function isOverdue(task: Task): boolean {
     return isBefore(parseISO(task.due_date), startOfDay(new Date()));
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── KanbanBoard ─────────────────────────────────────────────────────────────
 
-export default function PlanningPage() {
+export function KanbanBoard() {
     const { data: tasks, isLoading, updateTask, createTask } = useTasks();
     const { data: projects } = useProjects();
 
     const [filterProject, setFilterProject]   = useState<string>('all');
     const [filterPriority, setFilterPriority] = useState<string>('all');
 
-    // Create task dialog
     const [createOpen, setCreateOpen]       = useState(false);
     const [createStatus, setCreateStatus]   = useState<TaskStatus>('todo');
     const [newTitle, setNewTitle]           = useState('');
@@ -101,49 +110,43 @@ export default function PlanningPage() {
     };
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-text-primary tracking-tight">Planning</h1>
-                    <p className="text-text-secondary mt-1">Vue Kanban de toutes vos tâches.</p>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                    <Select value={filterProject} onValueChange={setFilterProject}>
-                        <SelectTrigger className="h-9 text-xs w-44 bg-white border-border">
-                            <SelectValue placeholder="Tous les projets" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Tous les projets</SelectItem>
-                            {projects?.map(p => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <Select value={filterPriority} onValueChange={setFilterPriority}>
-                        <SelectTrigger className="h-9 text-xs w-36 bg-white border-border">
-                            <SelectValue placeholder="Toutes priorités" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">Toutes priorités</SelectItem>
-                            <SelectItem value="high">Haute</SelectItem>
-                            <SelectItem value="medium">Normale</SelectItem>
-                            <SelectItem value="low">Basse</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <Button
-                        className="h-9 bg-brand text-white hover:bg-brand-hover text-xs font-semibold"
-                        onClick={() => openCreate('todo')}
-                    >
-                        <Plus className="h-4 w-4 mr-1.5" />
-                        Nouvelle tâche
-                    </Button>
-                </div>
+        <div className="space-y-4">
+            {/* Controls */}
+            <div className="flex items-center gap-3 flex-wrap">
+                <Select value={filterProject} onValueChange={setFilterProject}>
+                    <SelectTrigger className="h-9 text-xs w-44 bg-white border-border">
+                        <SelectValue placeholder="Tous les projets" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Tous les projets</SelectItem>
+                        {projects?.map(p => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={filterPriority} onValueChange={setFilterPriority}>
+                    <SelectTrigger className="h-9 text-xs w-36 bg-white border-border">
+                        <SelectValue placeholder="Toutes priorités" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Toutes priorités</SelectItem>
+                        <SelectItem value="high">Haute</SelectItem>
+                        <SelectItem value="medium">Normale</SelectItem>
+                        <SelectItem value="low">Basse</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Button
+                    className="h-9 bg-brand text-white hover:bg-brand-hover text-xs font-semibold ml-auto"
+                    onClick={() => openCreate('todo')}
+                >
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    Nouvelle tâche
+                </Button>
             </div>
 
-            {/* Kanban Board */}
+            {/* Board */}
             {isLoading ? (
-                <div className="py-20 text-center text-text-muted animate-pulse">
+                <div className="py-16 text-center text-text-muted animate-pulse text-sm">
                     Chargement des tâches...
                 </div>
             ) : (
@@ -153,9 +156,8 @@ export default function PlanningPage() {
                         return (
                             <div
                                 key={col.status}
-                                className={`rounded-xl border ${col.border} ${col.bg} flex flex-col min-h-[480px]`}
+                                className={`rounded-xl border ${col.border} ${col.bg} flex flex-col min-h-[280px]`}
                             >
-                                {/* Column header */}
                                 <div className="px-4 py-3 flex items-center gap-2 border-b border-black/5 shrink-0">
                                     <span className={`h-2.5 w-2.5 rounded-full ${col.accent} shrink-0`} />
                                     <span className="text-sm font-bold text-text-primary">{col.label}</span>
@@ -172,8 +174,6 @@ export default function PlanningPage() {
                                         <Plus className="h-3.5 w-3.5" />
                                     </Button>
                                 </div>
-
-                                {/* Task cards */}
                                 <div className="p-2 flex flex-col gap-2 flex-1 overflow-y-auto">
                                     {colTasks.length === 0 ? (
                                         <div className="flex-1 flex items-center justify-center">
@@ -309,7 +309,6 @@ function KanbanCard({ task, onMove }: {
         <div className={`bg-white rounded-lg border p-3 shadow-sm group transition-shadow hover:shadow-md ${
             overdue ? 'border-red-200' : 'border-border'
         }`}>
-            {/* Priority dot + title */}
             <div className="flex items-start gap-2 mb-2">
                 <span
                     className={`h-2 w-2 rounded-full shrink-0 mt-[5px] ${PRIORITY_DOT[task.priority]}`}
@@ -322,7 +321,6 @@ function KanbanCard({ task, onMove }: {
                 </p>
             </div>
 
-            {/* Project + due date */}
             <div className="flex items-center gap-1.5 flex-wrap mb-3 pl-4">
                 {task.projects?.name && (
                     <span className="text-[10px] font-bold bg-brand-light text-brand px-1.5 py-0.5 rounded-full border border-brand/20">
@@ -339,7 +337,6 @@ function KanbanCard({ task, onMove }: {
                 )}
             </div>
 
-            {/* Footer: move arrows + timer */}
             <div className="flex items-center justify-between pl-4">
                 <div className="flex gap-0.5">
                     <Button

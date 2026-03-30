@@ -61,7 +61,6 @@ export default function AppLayout() {
     // Map route to title
     const getPageTitle = (pathname: string) => {
         if (pathname === '/temps') return 'Suivi du temps';
-        if (pathname === '/planning') return 'Planning hebdomadaire';
         if (pathname === '/calendrier') return 'Calendrier';
         if (pathname === '/revenus') return 'Tableau de bord revenus';
         if (pathname === '/calculateur') return 'Calculateur de prix';
