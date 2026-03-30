@@ -57,7 +57,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
             unit_price: 0,
             tva_rate: rates[0],
             unit: Unit.HEURE,
-            category: ''
+            categorie: ''
         }
     });
 
@@ -77,7 +77,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 unit_price: product.unit_price,
                 tva_rate: product.tva_rate,
                 unit: product.unit,
-                category: product.category || ''
+                categorie: product.categorie || ''
             });
         } else if (!open && !isEditing) {
             reset({
@@ -86,7 +86,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 unit_price: 0,
                 tva_rate: rates[0],
                 unit: Unit.HEURE,
-                category: ''
+                categorie: ''
             });
         }
     }, [product, open, reset, isEditing, rates]);
@@ -99,7 +99,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 unit_price: data.unit_price,
                 tva_rate: data.tva_rate,
                 unit: data.unit as Unit,
-                category: data.category || null,
+                categorie: data.categorie || null,
             };
 
             if (isEditing && product) {
@@ -238,7 +238,7 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                             </div>
                         )} />
 
-                        <FormField control={form.control} name="category" render={({ field }) => (
+                        <FormField control={form.control} name="categorie" render={({ field }) => (
                             <div className="space-y-2">
                                 <FormLabel>Catégorie <span className="text-text-muted font-normal">(Optionnel)</span></FormLabel>
                                 <FormControl>

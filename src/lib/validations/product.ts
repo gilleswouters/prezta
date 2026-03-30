@@ -7,7 +7,7 @@ export const productSchema = z.object({
     unit_price: z.coerce.number().min(0, "Le prix ne peut pas être négatif"),
     tva_rate: z.coerce.number().min(0, "Taux de TVA invalide"),
     unit: z.string().refine((val) => Object.values(Unit).includes(val as Unit), { message: "Unité invalide" }),
-    category: z.string().optional().nullable(),
+    categorie: z.string().optional().nullable(),
 });
 
 export type ProductFormValues = z.infer<typeof productSchema>;

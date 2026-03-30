@@ -69,7 +69,7 @@ export function ProfessionLibraryTab({ onImported }: ProfessionLibraryTabProps) 
                     unit_price,
                     tva_rate:    t.tva_taux,
                     unit,
-                    category:    profile?.profession_slug ?? null,
+                    categorie:   profile?.profession_slug ?? null,
                 };
             });
 

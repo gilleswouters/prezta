@@ -91,7 +91,7 @@ export function ImportCatalogueModal({ open, onOpenChange }: ImportCatalogueModa
                 unit_price: isNaN(unit_price) ? 0 : unit_price,
                 tva_rate: 0,
                 unit: normalizeUnit(unitIdx !== -1 ? cols[unitIdx] : undefined),
-                category: categoryIdx !== -1 && cols[categoryIdx] ? cols[categoryIdx] : null,
+                categorie: categoryIdx !== -1 && cols[categoryIdx] ? cols[categoryIdx] : null,
                 _preview_name: name,
             });
         }

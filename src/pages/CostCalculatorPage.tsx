@@ -97,7 +97,7 @@ export default function CostCalculatorPage() {
             unit_price: totals.prixHT,
             tva_rate: 20,
             unit: 'forfait',
-            category: null,
+            categorie: null,
         });
         navigate('/catalogue');
     }
