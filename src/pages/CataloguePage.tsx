@@ -52,7 +52,7 @@ export default function CataloguePage() {
 
     const categories = useMemo(() => {
         const cats = new Set<string>();
-        products?.forEach(p => { if (p.categorie) cats.add(p.categorie); });
+        // no category column in products table
         return Array.from(cats).sort();
     }, [products]);
 
@@ -62,7 +62,7 @@ export default function CataloguePage() {
             const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
                 (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()));
             const matchesUnit = selectedUnit === 'all' || p.unit === selectedUnit;
-            const matchesCategory = !selectedCategory || p.categorie === selectedCategory;
+            const matchesCategory = true;
             return matchesSearch && matchesUnit && matchesCategory;
         });
     }, [products, searchQuery, selectedUnit, selectedCategory]);

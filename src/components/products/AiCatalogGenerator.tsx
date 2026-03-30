@@ -85,7 +85,6 @@ export function AiCatalogGenerator({ open, onOpenChange, canUseAI = true }: AiCa
                 unit_price: item.unit_price,
                 tva_rate: item.tva_rate,
                 unit: (Object.values(Unit).includes(item.unit as Unit) ? item.unit : Unit.FORFAIT) as Unit,
-                categorie: null,
             }));
 
             setGeneratedProducts(validatedProducts);

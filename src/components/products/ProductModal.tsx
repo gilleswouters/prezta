@@ -57,7 +57,6 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
             unit_price: 0,
             tva_rate: rates[0],
             unit: Unit.HEURE,
-            categorie: ''
         }
     });
 
@@ -77,7 +76,6 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 unit_price: product.unit_price,
                 tva_rate: product.tva_rate,
                 unit: product.unit,
-                categorie: product.categorie || ''
             });
         } else if (!open && !isEditing) {
             reset({
@@ -86,7 +84,6 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 unit_price: 0,
                 tva_rate: rates[0],
                 unit: Unit.HEURE,
-                categorie: ''
             });
         }
     }, [product, open, reset, isEditing, rates]);
@@ -99,7 +96,6 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                 unit_price: data.unit_price,
                 tva_rate: data.tva_rate,
                 unit: data.unit as Unit,
-                categorie: data.categorie || null,
             };
 
             if (isEditing && product) {
@@ -234,25 +230,6 @@ export function ProductModal({ open, onOpenChange, product }: ProductModalProps)
                                         maxLength={200}
                                     />
                                 </FormControl>
-                                <FormMessage />
-                            </div>
-                        )} />
-
-                        <FormField control={form.control} name="categorie" render={({ field }) => (
-                            <div className="space-y-2">
-                                <FormLabel>Catégorie <span className="text-text-muted font-normal">(Optionnel)</span></FormLabel>
-                                <FormControl>
-                                    <Input
-                                        list="product-categories"
-                                        placeholder="Ex: Développement, Design..."
-                                        className="bg-surface2 border-border"
-                                        {...field}
-                                        value={field.value || ''}
-                                    />
-                                </FormControl>
-                                <datalist id="product-categories">
-                                    {PRODUCT_CATEGORIES.map(c => <option key={c} value={c} />)}
-                                </datalist>
                                 <FormMessage />
                             </div>
                         )} />
