@@ -87,12 +87,18 @@ export default function AppLayout() {
             ]
         },
         {
-            group: 'Documents',
+            group: 'Catalogues',
             items: [
                 { label: 'Clients', path: '/clients', icon: <Users className="h-4 w-4" /> },
-                { label: 'Catalogue', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
-                { label: 'Registre', path: '/registre', icon: <Receipt className="h-4 w-4" /> },
-                { label: 'Modèles', path: '/templates', icon: <FileText className="h-4 w-4" /> },
+                { label: 'Prestations', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
+                { label: 'Fournisseurs', path: '/fournisseurs', icon: <Truck className="h-4 w-4" /> },
+            ]
+        },
+        {
+            group: 'Documents',
+            items: [
+                { label: 'Registre des ventes', path: '/registre', icon: <Receipt className="h-4 w-4" /> },
+                { label: 'Contrats types', path: '/templates', icon: <FileText className="h-4 w-4" /> },
             ]
         },
         {
@@ -100,7 +106,6 @@ export default function AppLayout() {
             items: [
                 { label: 'Suivi temps', path: '/temps', icon: <Timer className="h-4 w-4" /> },
                 { label: 'Revenus', path: '/revenus', icon: <BarChart2 className="h-4 w-4" /> },
-                { label: 'Fournisseurs', path: '/fournisseurs', icon: <Truck className="h-4 w-4" /> },
                 { label: 'Export comptable', path: '/export-comptable', icon: <FileArchive className="h-4 w-4" /> },
             ]
         },
