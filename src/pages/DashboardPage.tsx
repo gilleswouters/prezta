@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
@@ -18,8 +18,7 @@ import {
     CheckCircle2,
     X,
     UserCircle,
-    CalendarDays,
-    BarChart2,
+    ListTodo,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
@@ -77,6 +76,32 @@ export default function DashboardPage() {
     }
 
     const { kpi, overdueInvoices, unsignedContracts, urgentTasks, overdueTasks, recentProjects, staleSignedDocs, viewedQuotes, expiringContracts } = data;
+
+    // Merge overdue + urgent tasks, dedupe, sort by due_date asc, cap at 5
+    const planningTasks = useMemo(() => {
+        const seen = new Set<string>();
+        const combined: Array<{
+            id: string;
+            title: string;
+            due_date: string;
+            projectName: string | null;
+            projectId: string | null;
+            badge: 'En retard' | 'Urgent';
+        }> = [];
+        for (const t of overdueTasks) {
+            if (!seen.has(t.id)) {
+                seen.add(t.id);
+                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'En retard' });
+            }
+        }
+        for (const t of urgentTasks) {
+            if (!seen.has(t.id)) {
+                seen.add(t.id);
+                combined.push({ id: t.id, title: t.title, due_date: t.due_date, projectName: t.projectName, projectId: t.projectId, badge: 'Urgent' });
+            }
+        }
+        return combined.sort((a, b) => a.due_date.localeCompare(b.due_date)).slice(0, 5);
+    }, [urgentTasks, overdueTasks]);
 
     // Build the "Actions Requises" list from hook data
     type ActionItem = {
@@ -231,29 +256,51 @@ export default function DashboardPage() {
                 />
             </div>
 
-            {/* Quick-access shortcuts — pages removed from sidebar */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {[
-                    { label: 'Planning', desc: 'Organiser ma semaine', path: '/planning', icon: <CalendarDays className="h-5 w-5 text-violet-500" />, color: 'from-violet-500/10' },
-                    { label: 'Calendrier', desc: 'Voir mes événements', path: '/calendrier', icon: <Clock className="h-5 w-5 text-sky-500" />, color: 'from-sky-500/10' },
-                    { label: 'Revenus', desc: 'Analyser mes finances', path: '/revenus', icon: <BarChart2 className="h-5 w-5 text-emerald-500" />, color: 'from-emerald-500/10' },
-                ].map(({ label, desc, path, icon, color }) => (
-                    <button
-                        key={path}
-                        onClick={() => navigate(path)}
-                        className="bg-white border border-[var(--border)] rounded-xl p-4 text-left flex items-center gap-3 hover:shadow-md transition-all duration-200 group relative overflow-hidden"
-                    >
-                        <div className={`absolute inset-0 bg-gradient-to-br ${color} to-transparent opacity-0 group-hover:opacity-60 transition-opacity pointer-events-none`} />
-                        <div className="h-10 w-10 rounded-lg bg-gray-50 border border-[var(--border)] flex items-center justify-center shrink-0 relative z-10">
-                            {icon}
+            {/* Planning — Prochaines tâches inline */}
+            <div className="bg-white border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
+                <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-2">
+                        <ListTodo className="h-4 w-4 text-violet-500" />
+                        Planning — Prochaines tâches
+                    </h2>
+                    <Button variant="ghost" size="sm" className="text-xs h-7 text-[var(--brand)] hover:text-[var(--brand-hover)]" onClick={() => navigate('/planning')}>
+                        Voir le planning <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                </div>
+                <div className="divide-y divide-[var(--border)]">
+                    {planningTasks.length > 0 ? (
+                        planningTasks.map(task => (
+                            <div
+                                key={task.id}
+                                onClick={() => goToProject(task.projectId)}
+                                className="px-6 py-3 flex items-center justify-between hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group"
+                            >
+                                <div className="flex-1 min-w-0 pr-4">
+                                    <p className="text-sm font-medium text-[var(--text-primary)] truncate group-hover:text-[var(--brand)] transition-colors">{task.title}</p>
+                                    <div className="flex items-center gap-2 mt-0.5 text-xs text-[var(--text-muted)]">
+                                        {task.projectName && <span>{task.projectName}</span>}
+                                        {task.projectName && <span>·</span>}
+                                        <span>Éch. {format(parseISO(task.due_date), 'dd MMM', { locale: fr })}</span>
+                                    </div>
+                                </div>
+                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border shrink-0 ${
+                                    task.badge === 'En retard'
+                                        ? 'bg-red-50 text-red-600 border-red-100'
+                                        : 'bg-amber-50 text-amber-600 border-amber-100'
+                                }`}>
+                                    {task.badge}
+                                </span>
+                            </div>
+                        ))
+                    ) : (
+                        <div className="p-8 text-center text-[var(--text-muted)] text-sm">
+                            <div className="h-10 w-10 bg-violet-100 text-violet-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                                <CheckCircle2 className="h-5 w-5" />
+                            </div>
+                            Aucune tâche urgente. Tout est à jour !
                         </div>
-                        <div className="relative z-10">
-                            <p className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--brand)] transition-colors">{label}</p>
-                            <p className="text-xs text-[var(--text-muted)]">{desc}</p>
-                        </div>
-                        <ArrowRight className="h-4 w-4 text-[var(--text-muted)] ml-auto shrink-0 relative z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </button>
-                ))}
+                    )}
+                </div>
             </div>
 
             {/* Actions + Recent Projects */}
