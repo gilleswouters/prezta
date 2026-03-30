@@ -315,8 +315,6 @@ export function ContractWizardNew({ open, onOpenChange, projectId }: ContractWiz
     // ── Step labels ───────────────────────────────────────────────────────────
 
     const STEPS = ['Type', 'Termes', 'Clauses', 'Prestations', 'Aperçu'];
-    const _totalSteps = isTravail ? 4 : 5; // skip catalogue for travail
-
     const nextStep = () => {
         const next = state.step + 1;
         // Skip step 4 (catalogue) for travail types

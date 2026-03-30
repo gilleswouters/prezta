@@ -9,6 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useProfessionTemplates, groupProfessionsByCategory } from '@/hooks/useProfessions';
+import type { ProfessionTemplate } from '@/hooks/useProfessions';
 
 interface ProfessionComboboxProps {
     value: string | null;         // profession_slug
