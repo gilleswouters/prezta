@@ -18,6 +18,8 @@ import {
     CheckCircle2,
     X,
     UserCircle,
+    CalendarDays,
+    BarChart2,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
@@ -227,6 +229,31 @@ export default function DashboardPage() {
                     valueColor={kpi.overdueInvoicesCount > 0 ? 'text-orange-600' : undefined}
                     gradient="from-orange-500/10 to-transparent"
                 />
+            </div>
+
+            {/* Quick-access shortcuts — pages removed from sidebar */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {[
+                    { label: 'Planning', desc: 'Organiser ma semaine', path: '/planning', icon: <CalendarDays className="h-5 w-5 text-violet-500" />, color: 'from-violet-500/10' },
+                    { label: 'Calendrier', desc: 'Voir mes événements', path: '/calendrier', icon: <Clock className="h-5 w-5 text-sky-500" />, color: 'from-sky-500/10' },
+                    { label: 'Revenus', desc: 'Analyser mes finances', path: '/revenus', icon: <BarChart2 className="h-5 w-5 text-emerald-500" />, color: 'from-emerald-500/10' },
+                ].map(({ label, desc, path, icon, color }) => (
+                    <button
+                        key={path}
+                        onClick={() => navigate(path)}
+                        className="bg-white border border-[var(--border)] rounded-xl p-4 text-left flex items-center gap-3 hover:shadow-md transition-all duration-200 group relative overflow-hidden"
+                    >
+                        <div className={`absolute inset-0 bg-gradient-to-br ${color} to-transparent opacity-0 group-hover:opacity-60 transition-opacity pointer-events-none`} />
+                        <div className="h-10 w-10 rounded-lg bg-gray-50 border border-[var(--border)] flex items-center justify-center shrink-0 relative z-10">
+                            {icon}
+                        </div>
+                        <div className="relative z-10">
+                            <p className="text-sm font-semibold text-[var(--text-primary)] group-hover:text-[var(--brand)] transition-colors">{label}</p>
+                            <p className="text-xs text-[var(--text-muted)]">{desc}</p>
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-[var(--text-muted)] ml-auto shrink-0 relative z-10 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </button>
+                ))}
             </div>
 
             {/* Actions + Recent Projects */}

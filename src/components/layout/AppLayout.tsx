@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, Clock, FileText, Mail, CalendarDays, BarChart2, FileArchive, AlertTriangle, Timer } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, FileText, Mail, FileArchive, AlertTriangle, Timer, Truck } from 'lucide-react';
 import { ActiveTimerWidget } from '@/components/time/ActiveTimerWidget';
 import { StorageBar } from '@/components/ui/StorageBar';
 import { ChatAssistant } from '@/components/ai/ChatAssistant';
@@ -65,6 +65,7 @@ export default function AppLayout() {
         if (pathname === '/revenus') return 'Tableau de bord revenus';
         if (pathname === '/calculateur') return 'Calculateur de prix';
         if (pathname === '/export-comptable') return 'Export comptable';
+        if (pathname === '/fournisseurs') return 'Fournisseurs';
         if (pathname === '/dashboard') return 'Tableau de bord';
         if (pathname === '/templates') return 'Modèles de contrats';
         if (pathname.includes('/projets')) return 'Projets';
@@ -80,17 +81,14 @@ export default function AppLayout() {
         {
             group: 'Principal',
             items: [
-                { label: 'Dashboard', path: '/dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
-                { label: 'Revenus', path: '/revenus', icon: <BarChart2 className="h-4 w-4" /> },
-                { label: 'Calendrier', path: '/calendrier', icon: <Clock className="h-4 w-4" /> },
-                { label: 'Planning', path: '/planning', icon: <CalendarDays className="h-4 w-4" /> },
+                { label: 'Tableau de bord', path: '/dashboard', icon: <LayoutDashboard className="h-4 w-4" /> },
                 { label: 'Projets', path: '/projets', icon: <FolderKanban className="h-4 w-4" /> },
-                { label: 'Clients', path: '/clients', icon: <Users className="h-4 w-4" /> },
             ]
         },
         {
             group: 'Documents',
             items: [
+                { label: 'Clients', path: '/clients', icon: <Users className="h-4 w-4" /> },
                 { label: 'Catalogue', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
                 { label: 'Registre', path: '/registre', icon: <Receipt className="h-4 w-4" /> },
                 { label: 'Modèles', path: '/templates', icon: <FileText className="h-4 w-4" /> },
@@ -100,6 +98,7 @@ export default function AppLayout() {
             group: 'Outils',
             items: [
                 { label: 'Suivi temps', path: '/temps', icon: <Timer className="h-4 w-4" /> },
+                { label: 'Fournisseurs', path: '/fournisseurs', icon: <Truck className="h-4 w-4" /> },
                 { label: 'Export comptable', path: '/export-comptable', icon: <FileArchive className="h-4 w-4" /> },
             ]
         },

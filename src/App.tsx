@@ -33,6 +33,7 @@ const RevenueDashboardPage = lazy(() => import('@/pages/RevenueDashboardPage'))
 const ExportComptablePage  = lazy(() => import('@/pages/ExportComptablePage'))
 const ContractTemplatesPage = lazy(() => import('@/pages/ContractTemplatesPage'))
 const ClientPortalPage     = lazy(() => import('@/pages/ClientPortalPage'))
+const FournisseursPage     = lazy(() => import('@/pages/FournisseursPage'))
 
 const PageFallback = (
   <div className="flex items-center justify-center h-64">
@@ -86,6 +87,7 @@ function App() {
                 <Route path="/revenus" element={<RevenueDashboardPage />} />
                 <Route path="/export-comptable" element={<ExportComptablePage />} />
                 <Route path="/temps" element={<TimesheetPage />} />
+                <Route path="/fournisseurs" element={<FournisseursPage />} />
               </Route>
             </Route>
 
