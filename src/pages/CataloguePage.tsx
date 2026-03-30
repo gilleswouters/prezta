@@ -4,7 +4,6 @@ import { useProducts, useDeleteProduct, useToggleFavorite } from '@/hooks/usePro
 import type { Product } from '@/types/product';
 import { Unit } from '@/types/product';
 import { ProductModal } from '@/components/products/ProductModal';
-import { AiCatalogGenerator } from '@/components/products/AiCatalogGenerator';
 import { BenchmarkModal } from '@/components/catalogue/BenchmarkModal';
 import { usePlanLimits } from '@/hooks/usePlanLimits';
 import CostCalculatorPage from '@/pages/CostCalculatorPage';
@@ -30,7 +29,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Plus, Loader2, Pencil, Trash2, Search, Star, Sparkles, BarChart2, Lock } from 'lucide-react';
+import { Plus, Loader2, Pencil, Trash2, Search, Star, BarChart2, Lock } from 'lucide-react';
 
 export default function CataloguePage() {
     const [searchParams, setSearchParams] = useSearchParams();
@@ -41,7 +40,6 @@ export default function CataloguePage() {
     const { canUseAI } = usePlanLimits();
 
     const [modalOpen, setModalOpen] = useState(false);
-    const [aiModalOpen, setAiModalOpen] = useState(false);
     const [editingProduct, setEditingProduct] = useState<Product | null>(null);
     const [benchmarkProduct, setBenchmarkProduct] = useState<Product | null>(null);
 
@@ -133,12 +131,6 @@ export default function CataloguePage() {
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {!isEmpty && (
-                        <Button variant="outline" onClick={() => setAiModalOpen(true)} className="border-border text-ai hover:bg-ai/10">
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            IA
-                        </Button>
-                    )}
                     <Button onClick={handleCreateNew} className="bg-p3 text-bg hover:opacity-90">
                         <Plus className="mr-2 h-4 w-4" />
                         Nouvelle Prestation
@@ -157,10 +149,6 @@ export default function CataloguePage() {
                         Pour établir vos devis rapidement, commencez par construire votre catalogue de base.
                     </p>
                     <div className="flex flex-col sm:flex-row gap-4">
-                        <Button onClick={() => setAiModalOpen(true)} className="bg-ai text-white hover:bg-ai/90 h-12">
-                            <Sparkles className="mr-2 h-5 w-5" />
-                            Générer mon catalogue avec l'IA
-                        </Button>
                         <Button onClick={handleCreateNew} variant="outline" className="h-12 border-border text-text hover:bg-surface2">
                             Créer manuellement
                         </Button>
@@ -304,11 +292,6 @@ export default function CataloguePage() {
                 open={modalOpen}
                 onOpenChange={setModalOpen}
                 product={editingProduct}
-            />
-
-            <AiCatalogGenerator
-                open={aiModalOpen}
-                onOpenChange={setAiModalOpen}
             />
 
             {benchmarkProduct && (
