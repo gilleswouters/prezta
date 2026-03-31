@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useSubscription } from '@/hooks/useSubscription';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, FileText, Mail, FileArchive, AlertTriangle, Timer, Truck, CalendarDays, BarChart2 } from 'lucide-react';
+import { LayoutDashboard, FolderKanban, Users, BookOpen, Receipt, User, Sparkles, Plus, LogOut, FileText, Mail, FileArchive, AlertTriangle, Truck, CalendarDays, BarChart2 } from 'lucide-react';
 import { ActiveTimerWidget } from '@/components/time/ActiveTimerWidget';
 import { StorageBar } from '@/components/ui/StorageBar';
 import { ChatAssistant } from '@/components/ai/ChatAssistant';
@@ -60,7 +60,6 @@ export default function AppLayout() {
 
     // Map route to title
     const getPageTitle = (pathname: string) => {
-        if (pathname === '/temps') return 'Suivi du temps';
         if (pathname === '/calendrier') return 'Calendrier';
         if (pathname === '/revenus') return 'Tableau de bord revenus';
         if (pathname === '/calculateur') return 'Calculateur de prix';
@@ -95,16 +94,10 @@ export default function AppLayout() {
             ]
         },
         {
-            group: 'Documents',
+            group: 'Documents & Outils',
             items: [
                 { label: 'Contrats types', path: '/templates', icon: <FileText className="h-4 w-4" /> },
                 { label: 'Export comptable', path: '/export-comptable', icon: <FileArchive className="h-4 w-4" /> },
-            ]
-        },
-        {
-            group: 'Outils',
-            items: [
-                { label: 'Suivi temps', path: '/temps', icon: <Timer className="h-4 w-4" /> },
                 { label: 'Revenus', path: '/revenus', icon: <BarChart2 className="h-4 w-4" /> },
                 { label: 'Registre des ventes', path: '/registre', icon: <Receipt className="h-4 w-4" /> },
             ]

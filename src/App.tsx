@@ -27,7 +27,6 @@ import CGVPage from '@/pages/legal/CGVPage'
 import { Toaster } from '@/components/ui/sonner'
 
 // Heavy pages — code-split to reduce main bundle size
-const TimesheetPage        = lazy(() => import('@/pages/TimesheetPage'))
 const RevenueDashboardPage = lazy(() => import('@/pages/RevenueDashboardPage'))
 const ExportComptablePage  = lazy(() => import('@/pages/ExportComptablePage'))
 const ContractTemplatesPage = lazy(() => import('@/pages/ContractTemplatesPage'))
@@ -84,7 +83,6 @@ function App() {
                 <Route path="/calculateur" element={<Navigate to="/catalogue?tab=calculateur" replace />} />
                 <Route path="/revenus" element={<RevenueDashboardPage />} />
                 <Route path="/export-comptable" element={<ExportComptablePage />} />
-                <Route path="/temps" element={<TimesheetPage />} />
                 <Route path="/fournisseurs" element={<FournisseursPage />} />
               </Route>
             </Route>

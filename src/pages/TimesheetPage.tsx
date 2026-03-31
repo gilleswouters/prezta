@@ -1,3 +1,4 @@
+// Deprecated — removed from navigation
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
