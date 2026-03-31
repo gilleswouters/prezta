@@ -86,16 +86,16 @@ export const useUploadLogo = () => {
 
             const fileExt = file.name.split('.').pop();
             const fileName = `${user.id}-${Math.random()}.${fileExt}`;
-            const filePath = `logos/${fileName}`;
+            const filePath = `${user.id}/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
-                .from('public')
+                .from('logos')
                 .upload(filePath, file, { upsert: true });
 
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage
-                .from('public')
+                .from('logos')
                 .getPublicUrl(filePath);
 
             return publicUrl;
