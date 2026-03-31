@@ -1011,7 +1011,7 @@ export default function ProfilePage() {
                                             className="bg-surface2 border-border text-text-muted cursor-pointer"
                                             onChange={handleLogoChange}
                                         />
-                                        <FormDescription>Max 2MB. JPG, PNG ou WEBP.</FormDescription>
+                                        <p className="text-xs text-muted-foreground mt-1">Formats acceptés : PNG, JPG, SVG, WebP · Taille max : 5 Mo · Recommandé : 400×400 px</p>
                                     </div>
                                 </div>
                             </div>
