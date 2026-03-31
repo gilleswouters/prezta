@@ -97,8 +97,8 @@ export default function AppLayout() {
         {
             group: 'Documents',
             items: [
-                { label: 'Registre des ventes', path: '/registre', icon: <Receipt className="h-4 w-4" /> },
                 { label: 'Contrats types', path: '/templates', icon: <FileText className="h-4 w-4" /> },
+                { label: 'Export comptable', path: '/export-comptable', icon: <FileArchive className="h-4 w-4" /> },
             ]
         },
         {
@@ -106,7 +106,7 @@ export default function AppLayout() {
             items: [
                 { label: 'Suivi temps', path: '/temps', icon: <Timer className="h-4 w-4" /> },
                 { label: 'Revenus', path: '/revenus', icon: <BarChart2 className="h-4 w-4" /> },
-                { label: 'Export comptable', path: '/export-comptable', icon: <FileArchive className="h-4 w-4" /> },
+                { label: 'Registre des ventes', path: '/registre', icon: <Receipt className="h-4 w-4" /> },
             ]
         },
         {
