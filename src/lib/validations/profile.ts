@@ -37,6 +37,12 @@ export const profileSchema = z.object({
     address_city: z.string().optional().nullable(),
     address_zip: z.string().optional().nullable(),
     logo_url: z.string().optional().nullable(),
+    logo_preferences: z.object({
+        contracts: z.boolean(),
+        quotes: z.boolean(),
+        invoices: z.boolean(),
+        emails: z.boolean(),
+    }).optional().nullable(),
     legal_representative_name: z.string().optional().nullable(),
     legal_representative_role: z.string().optional().nullable(),
     profession_slug: z.string().optional().nullable(),

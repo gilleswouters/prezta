@@ -193,7 +193,7 @@ export function InvoicePDFDocument({ invoice, profile, client, isPro = false }: 
                 {/* HEADER */}
                 <View style={styles.header}>
                     <View style={styles.logoSection}>
-                        {profile?.logo_url ? (
+                        {profile?.logo_url && (profile?.logo_preferences?.invoices ?? true) ? (
                             <Image src={profile.logo_url} style={styles.logo} />
                         ) : (
                             <Text style={styles.companyName}>

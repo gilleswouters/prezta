@@ -12,6 +12,7 @@ import { PLANS } from '@/lib/plans';
 import { profileSchema } from '@/lib/validations/profile';
 import type { ProfileFormValues } from '@/lib/validations/profile';
 import { Country, LegalStatus } from '@/types/profile';
+import type { LogoPreferences } from '@/types/profile';
 import { StorageBar } from '@/components/ui/StorageBar';
 import { StorageLimitModal } from '@/components/ui/StorageLimitModal';
 import { useStorageUsage } from '@/hooks/useStorageUsage';
@@ -41,6 +42,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 // ─── Lemon Squeezy ─────────────────────────────────────────────────────────
@@ -729,6 +731,7 @@ export default function ProfilePage() {
             address_city: '',
             address_zip: '',
             logo_url: '',
+            logo_preferences: { contracts: true, quotes: true, invoices: true, emails: true },
             legal_representative_name: '',
             legal_representative_role: '',
             profession_slug: '',
@@ -754,6 +757,7 @@ export default function ProfilePage() {
                 address_city: profile.address_city || '',
                 address_zip: profile.address_zip || '',
                 logo_url: profile.logo_url || '',
+                logo_preferences: profile.logo_preferences ?? { contracts: true, quotes: true, invoices: true, emails: true },
                 legal_representative_name: profile.legal_representative_name || '',
                 legal_representative_role: profile.legal_representative_role || '',
                 profession_slug: profile.profession_slug || '',
@@ -1012,6 +1016,35 @@ export default function ProfilePage() {
                                             onChange={handleLogoChange}
                                         />
                                         <p className="text-xs text-muted-foreground mt-1">Formats acceptés : PNG, JPG, SVG, WebP · Taille max : 5 Mo · Recommandé : 400×400 px</p>
+                                    </div>
+                                </div>
+
+                                {/* Logo display preferences */}
+                                <div className="space-y-2 pt-2">
+                                    <p className="text-sm font-semibold text-text">Afficher le logo sur :</p>
+                                    <div className="grid grid-cols-2 gap-y-2 gap-x-4">
+                                        {(
+                                            [
+                                                { key: 'contracts', label: 'Contrats et modèles' },
+                                                { key: 'quotes',    label: 'Devis' },
+                                                { key: 'invoices',  label: 'Factures' },
+                                                { key: 'emails',    label: 'E-mails' },
+                                            ] as { key: keyof LogoPreferences; label: string }[]
+                                        ).map(({ key, label }) => (
+                                            <div key={key} className="flex items-center gap-2">
+                                                <Checkbox
+                                                    id={`logo-pref-${key}`}
+                                                    checked={form.watch('logo_preferences')?.[key] ?? true}
+                                                    onCheckedChange={(checked) => {
+                                                        const current = form.getValues('logo_preferences') ?? { contracts: true, quotes: true, invoices: true, emails: true };
+                                                        form.setValue('logo_preferences', { ...current, [key]: !!checked });
+                                                    }}
+                                                />
+                                                <label htmlFor={`logo-pref-${key}`} className="text-sm text-text cursor-pointer">
+                                                    {label}
+                                                </label>
+                                            </div>
+                                        ))}
                                     </div>
                                 </div>
                             </div>

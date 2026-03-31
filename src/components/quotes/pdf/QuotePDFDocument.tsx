@@ -220,7 +220,7 @@ export function QuotePDFDocument({ data, totals, profile, quoteNumber = "Brouill
                 {/* HEADER */}
                 <View style={styles.header}>
                     <View style={styles.logoSection}>
-                        {profile?.logo_url ? (
+                        {profile?.logo_url && (profile?.logo_preferences?.quotes ?? true) ? (
                             <Image src={profile.logo_url} style={styles.logo} />
                         ) : (
                             <Text style={styles.companyName}>

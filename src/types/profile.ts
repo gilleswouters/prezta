@@ -20,6 +20,13 @@ export const LegalStatus = {
 
 export type LegalStatus = typeof LegalStatus[keyof typeof LegalStatus];
 
+export interface LogoPreferences {
+    contracts: boolean;
+    quotes: boolean;
+    invoices: boolean;
+    emails: boolean;
+}
+
 export interface Profile {
     id: string; // references auth.users
     full_name: string | null;
@@ -36,6 +43,7 @@ export interface Profile {
     address_city: string | null;
     address_zip: string | null;
     logo_url: string | null;
+    logo_preferences: LogoPreferences | null;
     legal_representative_name: string | null;
     legal_representative_role: string | null;
     created_at: string;

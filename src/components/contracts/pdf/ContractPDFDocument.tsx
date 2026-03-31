@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import { Document, Page, Text, View, StyleSheet, Font, Image } from '@react-pdf/renderer';
 import type { Profile } from '@/types/profile';
 import type { ProjectContract } from '@/types/contract';
 import { getLegalMentions } from '@/lib/pdf/legal-mentions';
@@ -27,6 +27,17 @@ const styles = StyleSheet.create({
         marginBottom: 30,
         borderBottom: '1 solid #dfe6e9',
         paddingBottom: 20,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    logo: {
+        width: 80,
+        height: 80,
+        objectFit: 'contain',
+        marginRight: 16,
+    },
+    headerInfo: {
+        flex: 1,
     },
     companyName: {
         fontSize: 16,
@@ -188,22 +199,30 @@ export function ContractPDFDocument({ contract, profile, clientName }: ContractP
 
     const prestataire = profile?.company_name || profile?.full_name || 'Le Prestataire';
     const client = clientName || 'Le Client';
+    const showLogo = !!profile?.logo_url && (profile?.logo_preferences?.contracts ?? true);
 
     return (
         <Document>
             <Page size="A4" style={styles.page}>
                 {/* HEADER */}
                 <View style={styles.header}>
-                    <Text style={styles.companyName}>
-                        {profile?.company_name || profile?.full_name || 'Ma Société'}
-                    </Text>
-                    <Text style={styles.companyDetails}>{profile?.address_street}</Text>
-                    <Text style={styles.companyDetails}>
-                        {profile?.address_zip} {profile?.address_city}
-                    </Text>
-                    {profile?.vat_number ? (
-                        <Text style={styles.companyDetails}>TVA : {profile.vat_number}</Text>
+                    {showLogo ? (
+                        <Image src={profile!.logo_url!} style={styles.logo} />
                     ) : null}
+                    <View style={styles.headerInfo}>
+                        {!showLogo ? (
+                            <Text style={styles.companyName}>
+                                {profile?.company_name || profile?.full_name || 'Ma Société'}
+                            </Text>
+                        ) : null}
+                        <Text style={styles.companyDetails}>{profile?.address_street}</Text>
+                        <Text style={styles.companyDetails}>
+                            {profile?.address_zip} {profile?.address_city}
+                        </Text>
+                        {profile?.vat_number ? (
+                            <Text style={styles.companyDetails}>TVA : {profile.vat_number}</Text>
+                        ) : null}
+                    </View>
                 </View>
 
                 {/* TITLE */}
