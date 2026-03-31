@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useProfile } from '@/hooks/useProfile';
 import { supabase } from '@/lib/supabase';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -8,6 +8,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, ArrowRight, Check, Sparkles, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 import type { ContractTemplateFormData, Jurisdiction } from '@/types/contract';
+import { ContractPreviewPanel } from './ContractPreviewPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -172,6 +173,13 @@ export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: C
 
     const previewContent = buildContent(partiesText, missionObject, clauses);
 
+    // Debounced content for live PDF preview (500ms)
+    const [debouncedContent, setDebouncedContent] = useState(previewContent);
+    useEffect(() => {
+        const id = setTimeout(() => setDebouncedContent(previewContent), 500);
+        return () => clearTimeout(id);
+    }, [previewContent]);
+
     // ─── Step indicators ──────────────────────────────────────────────────────
 
     const STEPS = [
@@ -184,9 +192,21 @@ export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: C
 
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className={`bg-white border-border ${step === 4 && showPreview ? 'sm:max-w-[1100px]' : 'sm:max-w-[640px]'} max-h-[92vh] flex flex-col transition-all duration-300`}>
+            <DialogContent className={`bg-white border-border ${showPreview ? 'sm:max-w-[1100px]' : 'sm:max-w-[640px]'} max-h-[92vh] flex flex-col transition-all duration-300`}>
                 <DialogHeader className="shrink-0">
-                    <DialogTitle className="font-serif text-xl">Guide pas à pas — Nouveau modèle</DialogTitle>
+                    <div className="flex items-center justify-between">
+                        <DialogTitle className="font-serif text-xl">Guide pas à pas — Nouveau modèle</DialogTitle>
+                        {step >= 2 && (
+                            <button
+                                type="button"
+                                onClick={() => setShowPreview(v => !v)}
+                                className="flex items-center gap-1.5 text-xs text-brand hover:underline shrink-0"
+                            >
+                                {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                                {showPreview ? 'Masquer l\'aperçu' : 'Voir l\'aperçu PDF'}
+                            </button>
+                        )}
+                    </div>
                     <DialogDescription className="text-text-muted text-sm">
                         Étape {step} sur 5
                     </DialogDescription>
@@ -277,17 +297,7 @@ export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: C
                         {/* ─── Step 4: Clauses ──────────────────────────────────── */}
                         {step === 4 && (
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <p className="text-sm text-text-muted">Ajoutez vos clauses essentielles. Utilisez l'IA pour les générer.</p>
-                                    <button
-                                        type="button"
-                                        onClick={() => setShowPreview(v => !v)}
-                                        className="flex items-center gap-1 text-xs text-brand hover:underline"
-                                    >
-                                        {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                        {showPreview ? 'Masquer' : 'Aperçu'}
-                                    </button>
-                                </div>
+                                <p className="text-sm text-text-muted">Ajoutez vos clauses essentielles. Utilisez l'IA pour les générer.</p>
 
                                 <div className="space-y-3">
                                     {clauses.map((clause, idx) => (
@@ -376,13 +386,17 @@ export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: C
                         )}
                     </div>
 
-                    {/* Live preview panel (step 4 only) */}
-                    {step === 4 && showPreview && (
-                        <div className="w-80 shrink-0 border-l border-border pl-4 py-4 overflow-y-auto hidden lg:block">
-                            <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">Aperçu temps réel</p>
-                            <pre className="text-[11px] text-text-secondary whitespace-pre-wrap font-mono leading-relaxed">
-                                {previewContent || '(Rédigez pour voir l\'aperçu)'}
-                            </pre>
+                    {/* Live PDF preview panel (all steps from 2 onward) */}
+                    {step >= 2 && showPreview && (
+                        <div className="w-[420px] shrink-0 border-l border-border pl-4 py-4 hidden lg:flex flex-col">
+                            <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">Aperçu PDF temps réel</p>
+                            <div className="flex-1 rounded-lg overflow-hidden bg-surface">
+                                <ContractPreviewPanel
+                                    content={debouncedContent}
+                                    title={templateName || contractType}
+                                    profile={profile ?? null}
+                                />
+                            </div>
                         </div>
                     )}
                 </div>

@@ -1,10 +1,14 @@
 import { useState, useMemo } from 'react';
 import { useContractTemplates, useCreateContractTemplate, useUpdateContractTemplate, useDeleteContractTemplate } from '@/hooks/useContracts';
 import { Button } from '@/components/ui/button';
-import { Plus, FileText, Globe, Lock, Trash2, Edit3, Loader2, Copy, BookOpen } from 'lucide-react';
+import { Plus, FileText, Globe, Lock, Trash2, Edit3, Loader2, Copy, BookOpen, Eye, Download } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ContractTemplateModal } from '@/components/contracts/ContractTemplateModal';
 import { ContractWizardModal } from '@/components/contracts/ContractWizardModal';
+import { ContractPreviewPanel } from '@/components/contracts/ContractPreviewPanel';
 import { DeleteConfirmDialog } from '@/components/ui/DeleteConfirmDialog';
+import { useProfile } from '@/hooks/useProfile';
+import { useContractPDF } from '@/hooks/useContractPDF';
 import type { ContractTemplate, ContractTemplateFormData } from '@/types/contract';
 
 export default function ContractTemplatesPage() {
@@ -12,11 +16,15 @@ export default function ContractTemplatesPage() {
     const createTemplate = useCreateContractTemplate();
     const updateTemplate = useUpdateContractTemplate();
     const deleteTemplate = useDeleteContractTemplate();
+    const { data: profile } = useProfile();
+    const { downloadContractPDF } = useContractPDF();
 
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isWizardOpen, setIsWizardOpen] = useState(false);
     const [isModePickerOpen, setIsModePickerOpen] = useState(false);
     const [selectedTemplate, setSelectedTemplate] = useState<ContractTemplate | undefined>();
+    const [previewTemplate, setPreviewTemplate] = useState<ContractTemplate | null>(null);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -168,6 +176,15 @@ export default function ContractTemplatesPage() {
                                         </span>
 
                                         <div className="flex gap-1">
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="h-7 w-7 text-text-muted hover:text-brand hover:bg-brand-light"
+                                                onClick={(e) => { e.stopPropagation(); setPreviewTemplate(template); }}
+                                                title="Aperçu PDF"
+                                            >
+                                                <Eye className="h-3.5 w-3.5" />
+                                            </Button>
                                             {template.is_system ? (
                                                 <Button
                                                     variant="outline"
@@ -211,6 +228,51 @@ export default function ContractTemplatesPage() {
                     </div>
                 )}
             </div>
+
+            {/* Template preview dialog */}
+            <Dialog open={!!previewTemplate} onOpenChange={(open) => !open && setPreviewTemplate(null)}>
+                <DialogContent className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
+                    <DialogHeader className="px-6 py-4 border-b border-border shrink-0">
+                        <div className="flex items-center justify-between">
+                            <DialogTitle className="font-serif text-xl truncate pr-4">
+                                {previewTemplate?.name ?? 'Aperçu'}
+                            </DialogTitle>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs gap-1.5 shrink-0"
+                                disabled={isDownloading}
+                                onClick={async () => {
+                                    if (!previewTemplate) return;
+                                    setIsDownloading(true);
+                                    try {
+                                        await downloadContractPDF(
+                                            previewTemplate.content,
+                                            previewTemplate.name,
+                                            profile ?? null,
+                                            `${previewTemplate.name}.pdf`,
+                                        );
+                                    } finally {
+                                        setIsDownloading(false);
+                                    }
+                                }}
+                            >
+                                <Download className="h-3.5 w-3.5" />
+                                {isDownloading ? 'Téléchargement…' : 'Télécharger le PDF'}
+                            </Button>
+                        </div>
+                    </DialogHeader>
+                    <div className="flex-1 min-h-0 w-full overflow-hidden">
+                        {previewTemplate && (
+                            <ContractPreviewPanel
+                                content={previewTemplate.content}
+                                title={previewTemplate.name}
+                                profile={profile ?? null}
+                            />
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             {/* Modal & Dialogs */}
             <ContractWizardModal
