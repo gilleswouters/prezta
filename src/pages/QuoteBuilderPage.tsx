@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuoteStore } from '@/stores/useQuoteStore';
 import { QuoteLineItem } from '@/components/quotes/QuoteLineItem';
 import { CataloguePickerModal } from '@/components/quotes/CataloguePickerModal';
@@ -11,7 +11,8 @@ import { generateDocumentName } from '@/lib/document-naming';
 import { Unit } from '@/types/product';
 import { trackEvent } from '@/lib/plausible';
 import { useDeleteProject, useProjectById } from '@/hooks/useProjects';
-import { useQuoteByProject, useSaveQuote, useUpdateQuoteStatus } from '@/hooks/useQuotes';
+import { useQuoteByProject, useQuoteById, useSaveQuote, useUpdateQuoteStatus } from '@/hooks/useQuotes';
+import type { QuoteLine } from '@/types/quote';
 import { useTasks } from '@/hooks/useTasks';
 import { useProfile } from '@/hooks/useProfile';
 import { useCreateInvoice } from '@/hooks/useInvoices';
@@ -26,15 +27,21 @@ import { ProfileCompleteBanner } from '@/components/ui/ProfileCompleteBanner';
 export default function QuoteBuilderPage() {
     const { id } = useParams();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const quoteIdParam = searchParams.get('q') ?? undefined;
+
     const store = useQuoteStore();
     const deleteProject = useDeleteProject();
     const { data: profile } = useProfile();
     const { data: project } = useProjectById(id);
-    const { data: dbQuote } = useQuoteByProject(id);
+    // Load specific quote by ID (when ?q= param set), otherwise latest for project
+    const { data: dbQuoteById } = useQuoteById(quoteIdParam);
+    const { data: dbQuoteByProject } = useQuoteByProject(quoteIdParam ? undefined : id);
+    const dbQuote = dbQuoteById ?? dbQuoteByProject;
     const saveQuote = useSaveQuote();
     const createInvoice = useCreateInvoice();
     const updateQuoteStatus = useUpdateQuoteStatus();
-    const { data: projectTasks, createTask } = useTasks(id);
+    const { data: projectTasks, createTask, updateTask } = useTasks(id);
 
     const [aiBrief, setAiBrief] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -51,11 +58,11 @@ export default function QuoteBuilderPage() {
                     id: dbQuote.id,
                     title: dbQuote.title,
                     projectId: dbQuote.project_id,
-                    lines: dbQuote.lines || [],
+                    lines: (dbQuote.lines as QuoteLine[]) || [],
                     notes: dbQuote.notes || ''
                 };
                 // force trigger re-render de la page par zustand
-                store.updateMetadata(dbQuote.title, dbQuote.notes);
+                store.updateMetadata(dbQuote.title, dbQuote.notes ?? undefined);
             } else {
                 // Capture pending lines before initializeQuote resets the store
                 const pending = store.pendingTimesheetLines;
@@ -104,17 +111,17 @@ export default function QuoteBuilderPage() {
         }
     };
 
-    const handleImportFromTasks = () => {
+    const handleImportBillableTasks = async () => {
         if (!projectTasks || projectTasks.length === 0) {
             toast.info('Aucune tâche trouvée pour ce projet.');
             return;
         }
-        const activeTasks = projectTasks.filter(t => t.status !== 'done');
-        if (activeTasks.length === 0) {
-            toast.info('Toutes les tâches sont déjà terminées.');
+        const billable = projectTasks.filter(t => t.facturable && t.inclus_devis && t.status !== 'done');
+        if (billable.length === 0) {
+            toast.info('Aucune prestation marquée "Inclure dans devis". Cochez cette option sur vos tâches facturables.');
             return;
         }
-        activeTasks.forEach(task => {
+        billable.forEach(task => {
             store.addLine();
             const newLine = store.data.lines[store.data.lines.length - 1];
             if (newLine) {
@@ -122,13 +129,21 @@ export default function QuoteBuilderPage() {
                     name: task.title,
                     description: task.description || '',
                     quantity: 1,
-                    unitPrice: 0,
+                    unitPrice: task.prix_estime ?? 0,
                     tvaRate: 20,
                     unit: 'forfait' as const,
                 });
             }
         });
-        toast.success(`${activeTasks.length} tâche(s) importée(s) en lignes de devis.`);
+        // Unmark inclus_devis after import (non-blocking)
+        for (const task of billable) {
+            try {
+                await updateTask({ id: task.id, updates: { inclus_devis: false } });
+            } catch {
+                // non-blocking
+            }
+        }
+        toast.success(`${billable.length} prestation(s) importée(s) en lignes de devis.`);
     };
 
     const handleSave = async () => {
@@ -388,15 +403,15 @@ export default function QuoteBuilderPage() {
 
                             <CataloguePickerModal />
 
-                            {projectTasks && projectTasks.filter(t => t.status !== 'done').length > 0 && (
+                            {projectTasks && projectTasks.filter(t => t.facturable && t.inclus_devis && t.status !== 'done').length > 0 && (
                                 <Button
                                     variant="outline"
                                     className="border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-semibold h-10 shrink-0"
-                                    onClick={handleImportFromTasks}
-                                    title="Importer les tâches actives comme lignes de devis"
+                                    onClick={handleImportBillableTasks}
+                                    title="Importer les prestations facturables marquées 'Inclure dans devis'"
                                 >
                                     <FolderKanban className="h-4 w-4 mr-2" />
-                                    Depuis les tâches
+                                    Importer prestations ({projectTasks.filter(t => t.facturable && t.inclus_devis && t.status !== 'done').length})
                                 </Button>
                             )}
                         </div>

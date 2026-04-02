@@ -69,7 +69,7 @@ export default function AppLayout() {
         if (pathname === '/templates') return 'Modèles de contrats';
         if (pathname.includes('/projets')) return 'Projets';
         if (pathname.includes('/clients')) return 'Clients';
-        if (pathname.includes('/catalogue')) return 'Catalogue';
+        if (pathname.includes('/catalogue')) return 'Bibliothèque';
         if (pathname.includes('/registre')) return 'Registre';
         if (pathname.includes('/profil')) return 'Profil';
         if (pathname.includes('/parametres/emails')) return 'Modèles d\'e-mails';
@@ -89,7 +89,7 @@ export default function AppLayout() {
             group: 'Catalogues',
             items: [
                 { label: 'Clients', path: '/clients', icon: <Users className="h-4 w-4" /> },
-                { label: 'Prestations', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
+                { label: 'Bibliothèque', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
                 { label: 'Fournisseurs', path: '/fournisseurs', icon: <Truck className="h-4 w-4" /> },
             ]
         },

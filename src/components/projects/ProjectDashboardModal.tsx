@@ -6,16 +6,17 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ProjectTaskList } from '@/components/tasks/ProjectTaskList';
+import { QuickTaskPopup } from '@/components/tasks/QuickTaskPopup';
 import { useTasks } from '@/hooks/useTasks';
 import { SendForSignatureModal } from '@/components/contracts/SendForSignatureModal';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock, Download, Archive, Send, AlertCircle, Loader2, Eye } from 'lucide-react';
+import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock, Download, Archive, Send, AlertCircle, Loader2, Eye, Copy, CheckSquare } from 'lucide-react';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useQuoteByProject, useUpdateQuoteStatus } from '@/hooks/useQuotes';
+import { useQuotesByProject, useDuplicateQuote, useUpdateQuoteStatus, type Quote } from '@/hooks/useQuotes';
 import { useProjectContracts } from '@/hooks/useContracts';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useProfile } from '@/hooks/useProfile';
@@ -46,24 +47,31 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
 
     // Fetch all project documents
     const { data: tasks } = useTasks(project?.id);
-    const { data: quote, isLoading: quoteLoading } = useQuoteByProject(project?.id);
+    const { data: quotes, isLoading: quoteLoading } = useQuotesByProject(project?.id);
     const { data: contracts, isLoading: contractsLoading } = useProjectContracts(project?.id);
     const { data: invoices, isLoading: invoicesLoading } = useInvoices(project?.id);
     const { data: profile } = useProfile();
     const updateQuoteStatus = useUpdateQuoteStatus();
+    const duplicateQuote = useDuplicateQuote();
     const queryClient = useQueryClient();
     const { user } = useAuth();
 
     // Portal state
     const [isTogglingPortal, setIsTogglingPortal] = React.useState(false);
 
-    // Devis tab: FIRMA send state
-    const [quoteSendModalOpen, setQuoteSendModalOpen] = React.useState(false);
+    // Quick task popup
+    const [quickTaskOpen, setQuickTaskOpen] = React.useState(false);
+
+    // Devis tab: FIRMA send — tracks which quote is being sent
+    const [quoteSendTarget, setQuoteSendTarget] = React.useState<Quote | null>(null);
     const [quoteSending, setQuoteSending] = React.useState(false);
     const [quoteSignerError, setQuoteSignerError] = React.useState(false);
 
+    // Devis tab: version confirmation dialog
+    const [versionConfirmQuote, setVersionConfirmQuote] = React.useState<Quote | null>(null);
+
     // Document preview dialogs
-    const [quotePreviewOpen, setQuotePreviewOpen] = React.useState(false);
+    const [quotePreviewTarget, setQuotePreviewTarget] = React.useState<Quote | null>(null);
     const [previewContract, setPreviewContract] = React.useState<ProjectContract | null>(null);
     const [previewInvoice, setPreviewInvoice] = React.useState<Invoice | null>(null);
 
@@ -75,19 +83,20 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
 
     // Combine documents for the pipeline
     const combinedDocuments = React.useMemo(() => {
-        const docs = [];
-        if (quote) {
-            docs.push({
+        type DocEntry = { type: string; id: string; title: string; reference: string; status: string; date: string; icon: React.ComponentType<{ className?: string }>; color: string; bg: string };
+        const docs: DocEntry[] = [];
+        if (quotes && quotes.length > 0) {
+            quotes.forEach(q => docs.push({
                 type: 'quote',
-                id: quote.id,
-                title: quote.title,
-                reference: quote.reference || 'Nouveau',
-                status: quote.status || 'draft',
-                date: quote.created_at,
+                id: q.id,
+                title: q.version && q.version > 1 ? `${q.title} v${q.version}` : q.title,
+                reference: q.reference || 'Nouveau',
+                status: q.status || 'draft',
+                date: q.created_at,
                 icon: FileText,
                 color: 'text-orange-600',
                 bg: 'bg-orange-100'
-            });
+            }));
         }
         if (contracts) {
             contracts.forEach(c => docs.push({
@@ -117,7 +126,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
         }
         // Trier du plus récent au plus ancien
         return docs.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
-    }, [quote, contracts, invoices]);
+    }, [quotes, contracts, invoices]);
 
     // ── Devis tab helpers ─────────────────────────────────────────────────────
 
@@ -134,17 +143,18 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
         return { subtotalHT, tvaAmounts, totalTVA, totalTTC: subtotalHT + totalTVA };
     }
 
-    const handleRequestQuoteSend = () => {
+    const handleRequestQuoteSend = (q: Quote) => {
         if (!project?.clients?.contact_name) {
             setQuoteSignerError(true);
             return;
         }
         setQuoteSignerError(false);
-        setQuoteSendModalOpen(true);
+        setQuoteSendTarget(q);
     };
 
     const handleSendQuoteToFirma = async () => {
-        if (!quote) return;
+        if (!quoteSendTarget) return;
+        const quote = quoteSendTarget;
         const toastId = toast.loading('Génération du document (1/2)...');
         setQuoteSending(true);
 
@@ -200,6 +210,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
 
                     trackEvent('signature_requested');
                     toast.success('Envoyé pour signature avec succès !', { id: toastId });
+                    setQuoteSendTarget(null);
                 } catch (err) {
                     const message = err instanceof Error ? err.message : "Erreur lors de l'envoi";
                     toast.error(message, { id: toastId });
@@ -249,6 +260,33 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
             queryClient.invalidateQueries({ queryKey: ['projects', user?.id] });
             toast.success("Lien réinitialisé — l'ancien lien ne fonctionne plus.");
         }
+    };
+
+    // FIX 7: open version-confirmation dialog for sent/accepted quotes
+    const handleModifyQuote = (q: Quote) => {
+        if (q.status === 'sent' || q.status === 'lu' || q.status === 'accepted') {
+            setVersionConfirmQuote(q);
+        } else {
+            navigate(`/projets/${project?.id}/devis?q=${q.id}`);
+        }
+    };
+
+    const handleCreateNewVersion = async () => {
+        if (!versionConfirmQuote) return;
+        try {
+            const newQuote = await duplicateQuote.mutateAsync({ quoteId: versionConfirmQuote.id });
+            setVersionConfirmQuote(null);
+            toast.success(`Version v${newQuote.version} créée.`);
+            navigate(`/projets/${project?.id}/devis?q=${newQuote.id}`);
+        } catch {
+            // error toast handled in hook
+        }
+    };
+
+    const handleModifyAnyway = () => {
+        if (!versionConfirmQuote) return;
+        navigate(`/projets/${project?.id}/devis?q=${versionConfirmQuote.id}`);
+        setVersionConfirmQuote(null);
     };
 
     if (!project) return null;
@@ -369,38 +407,28 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                     </div>
                                 </div>
 
-                                {/* Card 2 — Actions rapides */}
+                                {/* Card 2 — Ajouter une tâche / prestation */}
                                 <div className="bg-white rounded-xl border border-border p-4 flex flex-col shadow-sm">
-                                    <h3 className="font-bold text-sm text-text-primary mb-3">Actions rapides</h3>
-                                    <div className="flex-1 space-y-2">
-                                        <button
-                                            className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-brand/40 hover:bg-brand/5 transition-all text-left group"
-                                            onClick={() => navigate(`/projets/${project.id}/devis`)}
-                                        >
-                                            <div className="bg-brand/10 p-2 rounded-lg group-hover:bg-brand/20 transition-colors shrink-0">
-                                                <FileText className="h-4 w-4 text-brand" />
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-sm text-text-primary">Devis & Factures</p>
-                                                <p className="text-[11px] text-text-muted">Gérer la facturation</p>
-                                            </div>
-                                        </button>
-                                        <button
-                                            className="w-full flex items-center gap-3 p-3 rounded-lg border border-border hover:border-blue-400 hover:bg-blue-50 transition-all text-left group"
-                                            onClick={onOpenContracts}
-                                        >
-                                            <div className="bg-blue-100 p-2 rounded-lg group-hover:bg-blue-200 transition-colors shrink-0">
-                                                <FileSignature className="h-4 w-4 text-blue-600" />
-                                            </div>
-                                            <div>
-                                                <p className="font-semibold text-sm text-text-primary">Contrats légaux</p>
-                                                <p className="text-[11px] text-text-muted">Générer & Signer</p>
-                                            </div>
-                                        </button>
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <div className="h-7 w-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
+                                            <CheckSquare className="h-4 w-4 text-amber-600" />
+                                        </div>
+                                        <h3 className="font-bold text-sm text-text-primary">Tâches & Prestations</h3>
                                     </div>
+                                    <p className="text-xs text-text-muted flex-1">
+                                        Ajoutez une tâche simple ou une prestation facturable directement liée à ce projet.
+                                    </p>
                                     <div className="mt-auto pt-4 flex gap-2 flex-wrap">
-                                        <Button size="sm" variant="outline" onClick={() => setActiveTab('documents')} className="text-xs">
-                                            Voir les documents
+                                        <Button
+                                            size="sm"
+                                            className="bg-amber-500 hover:bg-amber-600 text-white text-xs"
+                                            onClick={() => setQuickTaskOpen(true)}
+                                        >
+                                            <Plus className="h-3.5 w-3.5 mr-1.5" />
+                                            Tâche / Prestation
+                                        </Button>
+                                        <Button size="sm" variant="outline" onClick={() => setActiveTab('tasks')} className="text-xs">
+                                            Voir les tâches
                                         </Button>
                                     </div>
                                 </div>
@@ -514,7 +542,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
                                     <div>
                                         <h3 className="font-bold text-lg text-text-primary">Devis du projet</h3>
-                                        <p className="text-sm text-text-muted">Gérez le devis et son envoi pour signature.</p>
+                                        <p className="text-sm text-text-muted">Gérez les versions de devis et leur envoi pour signature.</p>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => navigate(`/projets/${project.id}/devis`)} className="text-brand border-brand/30 hover:bg-brand-light">
                                         <Plus className="h-4 w-4 mr-1" /> Nouveau devis
@@ -526,143 +554,179 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                         <Clock className="h-6 w-6 animate-spin opacity-50 mb-3" />
                                         <p>Chargement...</p>
                                     </div>
-                                ) : !quote ? (
+                                ) : !quotes || quotes.length === 0 ? (
                                     <div className="py-12 text-center border-2 border-dashed border-border rounded-xl bg-surface/50">
                                         <FileText className="h-10 w-10 text-text-muted opacity-30 mx-auto mb-3" />
                                         <p className="font-semibold text-text-primary mb-1">Aucun devis pour ce projet</p>
                                         <p className="text-sm text-text-muted">Créez un devis pour structurer la mission.</p>
                                     </div>
-                                ) : (() => {
-                                    const quoteLines: QuoteLine[] = Array.isArray(quote.lines) ? (quote.lines as QuoteLine[]) : [];
-                                    const totals = calcQuoteTotals(quoteLines);
-                                    const quoteData: QuoteData = {
-                                        id: quote.id,
-                                        title: quote.title,
-                                        projectId: quote.project_id,
-                                        lines: quoteLines,
-                                        notes: quote.notes ?? '',
-                                        version: quote.version ?? 1,
-                                        created_at: quote.created_at,
-                                    };
-                                    return (
-                                        <div className="border border-border rounded-xl p-4 bg-white shadow-sm">
-                                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                                <div className="flex-1 space-y-1">
-                                                    <div className="flex items-center gap-3">
-                                                        <h4 className="font-bold text-text-primary">{quote.title}</h4>
-                                                        <DocumentStatusBadge status={quote.status || 'draft'} />
-                                                    </div>
-                                                    <div className="flex items-center gap-4 text-xs text-text-muted">
-                                                        <span className="font-semibold text-text-primary">{totals.subtotalHT.toFixed(2)} € HT</span>
-                                                        <span className="flex items-center gap-1">
-                                                            <Calendar className="h-3 w-3" />
-                                                            {quote.created_at ? format(new Date(quote.created_at), 'dd/MM/yyyy', { locale: fr }) : '—'}
-                                                        </span>
-                                                    </div>
-                                                </div>
+                                ) : (
+                                    <div className="space-y-3">
+                                        {quotes.map(q => {
+                                            const ql: QuoteLine[] = Array.isArray(q.lines) ? (q.lines as QuoteLine[]) : [];
+                                            const totals = calcQuoteTotals(ql);
+                                            const qd: QuoteData = {
+                                                id: q.id,
+                                                title: q.title,
+                                                projectId: q.project_id,
+                                                lines: ql,
+                                                notes: q.notes ?? '',
+                                                version: q.version ?? 1,
+                                                created_at: q.created_at,
+                                            };
+                                            return (
+                                                <div key={q.id} className="border border-border rounded-xl p-4 bg-white shadow-sm">
+                                                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                                        <div className="flex-1 space-y-1 min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className="text-[11px] font-bold bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full border border-gray-200">
+                                                                    v{q.version ?? 1}
+                                                                </span>
+                                                                <h4 className="font-bold text-text-primary truncate">{q.title}</h4>
+                                                                <DocumentStatusBadge status={q.status || 'draft'} />
+                                                            </div>
+                                                            <div className="flex items-center gap-4 text-xs text-text-muted">
+                                                                <span className="font-semibold text-text-primary">{totals.subtotalHT.toFixed(2)} € HT</span>
+                                                                <span className="flex items-center gap-1">
+                                                                    <Calendar className="h-3 w-3" />
+                                                                    {q.created_at ? format(new Date(q.created_at), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                                                                </span>
+                                                            </div>
+                                                        </div>
 
-                                                <div className="flex items-center gap-2 flex-wrap">
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-8 text-xs text-text-muted hover:text-brand hover:bg-brand-light"
-                                                        onClick={() => navigate(`/projets/${project.id}/devis`)}
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
-                                                        Modifier
-                                                    </Button>
-                                                    <Button
-                                                        size="sm"
-                                                        variant="ghost"
-                                                        className="h-8 text-xs text-text-muted hover:text-brand hover:bg-brand-light"
-                                                        onClick={() => setQuotePreviewOpen(true)}
-                                                    >
-                                                        <Eye className="h-3.5 w-3.5 mr-1.5" />
-                                                        Aperçu
-                                                    </Button>
-                                                    <PDFDownloadLink
-                                                        document={<QuotePDFDocument data={quoteData} totals={totals} profile={profile ?? null} />}
-                                                        fileName={generateDocumentName(
-                                                            'Devis',
-                                                            project.clients?.name || 'CLIENT',
-                                                            quote.created_at || new Date().toISOString(),
-                                                            quote.version ?? 1,
-                                                        )}
-                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary"
-                                                    >
-                                                        {({ loading }) => (
-                                                            <>
-                                                                {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                                                                PDF
-                                                            </>
-                                                        )}
-                                                    </PDFDownloadLink>
-
-                                                    {(!quote.status || quote.status === 'draft' || quote.status === 'sent') && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            disabled={quoteSending}
-                                                            onClick={handleRequestQuoteSend}
-                                                            className="h-8 text-xs font-semibold text-brand border-brand/30 hover:bg-brand-light"
-                                                        >
-                                                            {quoteSending ? (
-                                                                <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                                                            ) : (
-                                                                <Send className="h-3.5 w-3.5 mr-1.5" />
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-8 text-xs text-text-muted hover:text-brand hover:bg-brand-light"
+                                                                onClick={() => handleModifyQuote(q)}
+                                                            >
+                                                                <Pencil className="h-3.5 w-3.5 mr-1" />
+                                                                Modifier
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-8 text-xs text-text-muted hover:text-brand hover:bg-brand-light"
+                                                                onClick={() => setQuotePreviewTarget(q)}
+                                                            >
+                                                                <Eye className="h-3.5 w-3.5 mr-1" />
+                                                                Aperçu
+                                                            </Button>
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="h-8 text-xs text-text-muted hover:text-brand hover:bg-brand-light"
+                                                                disabled={duplicateQuote.isPending}
+                                                                onClick={() => duplicateQuote.mutate({ quoteId: q.id })}
+                                                            >
+                                                                <Copy className="h-3.5 w-3.5 mr-1" />
+                                                                Dupliquer
+                                                            </Button>
+                                                            <PDFDownloadLink
+                                                                document={<QuotePDFDocument data={qd} totals={totals} profile={profile ?? null} />}
+                                                                fileName={generateDocumentName('Devis', project.clients?.name || 'CLIENT', q.created_at || new Date().toISOString(), q.version ?? 1)}
+                                                                className="inline-flex items-center gap-1 text-xs font-semibold h-8 px-2.5 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary"
+                                                            >
+                                                                {({ loading }) => (
+                                                                    <>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} PDF</>
+                                                                )}
+                                                            </PDFDownloadLink>
+                                                            {q.status !== 'archived' && q.status !== 'accepted' && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    disabled={quoteSending}
+                                                                    onClick={() => handleRequestQuoteSend(q)}
+                                                                    className="h-8 text-xs font-semibold text-brand border-brand/30 hover:bg-brand-light"
+                                                                >
+                                                                    {quoteSending && quoteSendTarget?.id === q.id ? (
+                                                                        <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                                                    ) : (
+                                                                        <Send className="h-3.5 w-3.5 mr-1" />
+                                                                    )}
+                                                                    Signer
+                                                                </Button>
                                                             )}
-                                                            Signer
-                                                        </Button>
-                                                    )}
+                                                            {q.status !== 'archived' && (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="ghost"
+                                                                    onClick={() => updateQuoteStatus.mutate({ id: q.id, status: 'archived' })}
+                                                                    className="h-8 text-xs text-text-muted hover:text-danger hover:bg-danger-light"
+                                                                >
+                                                                    <Archive className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </div>
 
-                                                    {quote.status !== 'archived' && (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => updateQuoteStatus.mutate({ id: quote.id, status: 'archived' })}
-                                                            className="h-8 text-xs font-semibold text-text-muted hover:text-danger hover:border-danger/30 hover:bg-danger-light"
-                                                        >
-                                                            <Archive className="h-3.5 w-3.5 mr-1.5" />
-                                                            Archiver
-                                                        </Button>
+                                                    {quoteSignerError && quoteSendTarget?.id === q.id && (
+                                                        <div className="mt-3 flex items-center gap-2 text-xs text-danger bg-danger-light/40 border border-danger/20 rounded-lg px-3 py-2">
+                                                            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                                                            Ajoutez le nom du signataire dans la fiche client avant d'envoyer.
+                                                        </div>
                                                     )}
                                                 </div>
-                                            </div>
-
-                                            {quoteSignerError && (
-                                                <div className="mt-3 flex items-center gap-2 text-xs text-danger bg-danger-light/40 border border-danger/20 rounded-lg px-3 py-2">
-                                                    <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                                                    Ajoutez le nom du signataire dans la fiche client avant d'envoyer.
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })()}
+                                            );
+                                        })}
+                                    </div>
+                                )}
                             </div>
 
+                            {/* FIX 7: Version confirmation dialog */}
+                            <Dialog open={!!versionConfirmQuote} onOpenChange={(open) => !open && setVersionConfirmQuote(null)}>
+                                <DialogContent className="sm:max-w-[420px] bg-white border-border rounded-2xl p-6">
+                                    <DialogTitle className="text-base font-bold text-text-primary">Devis déjà envoyé</DialogTitle>
+                                    <DialogDescription className="text-sm text-text-muted mt-1">
+                                        Ce devis a déjà été envoyé au client. Pour préserver la traçabilité, créez une nouvelle version.
+                                    </DialogDescription>
+                                    <div className="flex flex-col gap-2 mt-4">
+                                        <Button
+                                            onClick={handleCreateNewVersion}
+                                            disabled={duplicateQuote.isPending}
+                                            className="bg-brand text-white hover:bg-brand-hover"
+                                        >
+                                            {duplicateQuote.isPending ? (
+                                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            ) : (
+                                                <Copy className="h-4 w-4 mr-2" />
+                                            )}
+                                            Créer v{(versionConfirmQuote?.version ?? 1) + 1} (recommandé)
+                                        </Button>
+                                        <Button variant="outline" onClick={handleModifyAnyway} className="text-text-muted">
+                                            Modifier quand même
+                                        </Button>
+                                        <Button variant="ghost" onClick={() => setVersionConfirmQuote(null)} className="text-text-muted">
+                                            Annuler
+                                        </Button>
+                                    </div>
+                                </DialogContent>
+                            </Dialog>
+
                             <SendForSignatureModal
-                                open={quoteSendModalOpen}
-                                onOpenChange={setQuoteSendModalOpen}
+                                open={!!quoteSendTarget}
+                                onOpenChange={(open) => !open && setQuoteSendTarget(null)}
                                 signerName={project?.clients?.contact_name ?? ''}
                                 signerEmail={project?.clients?.email ?? ''}
-                                documentTitle={quote?.title ?? ''}
+                                documentTitle={quoteSendTarget?.title ?? ''}
                                 documentType="Devis"
                                 onConfirm={handleSendQuoteToFirma}
                             />
 
                             {/* Quote PDF preview dialog */}
-                            {quote && (() => {
-                                const ql: QuoteLine[] = Array.isArray(quote.lines) ? (quote.lines as QuoteLine[]) : [];
+                            {quotePreviewTarget && (() => {
+                                const ql: QuoteLine[] = Array.isArray(quotePreviewTarget.lines) ? (quotePreviewTarget.lines as QuoteLine[]) : [];
                                 const qt = calcQuoteTotals(ql);
-                                const qd: QuoteData = { id: quote.id, title: quote.title, projectId: quote.project_id, lines: ql, notes: quote.notes ?? '', version: quote.version ?? 1, created_at: quote.created_at };
+                                const qd: QuoteData = { id: quotePreviewTarget.id, title: quotePreviewTarget.title, projectId: quotePreviewTarget.project_id, lines: ql, notes: quotePreviewTarget.notes ?? '', version: quotePreviewTarget.version ?? 1, created_at: quotePreviewTarget.created_at };
                                 return (
-                                    <Dialog open={quotePreviewOpen} onOpenChange={setQuotePreviewOpen}>
+                                    <Dialog open={!!quotePreviewTarget} onOpenChange={(open) => !open && setQuotePreviewTarget(null)}>
                                         <DialogContent className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
                                             <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-                                                <DialogTitle className="font-serif text-lg truncate pr-4">{quote.title}</DialogTitle>
+                                                <DialogTitle className="font-serif text-lg truncate pr-4">{quotePreviewTarget.title} v{quotePreviewTarget.version ?? 1}</DialogTitle>
                                                 <PDFDownloadLink
                                                     document={<QuotePDFDocument data={qd} totals={qt} profile={profile ?? null} />}
-                                                    fileName={generateDocumentName('Devis', project.clients?.name || 'CLIENT', quote.created_at || new Date().toISOString(), quote.version ?? 1)}
+                                                    fileName={generateDocumentName('Devis', project.clients?.name || 'CLIENT', quotePreviewTarget.created_at || new Date().toISOString(), quotePreviewTarget.version ?? 1)}
                                                     className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary shrink-0"
                                                 >
                                                     {({ loading }) => (<>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Télécharger PDF</>)}
@@ -785,6 +849,15 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                     </div>
                 </Tabs>
             </DialogContent>
+
+            {/* Quick Task Popup */}
+            {project && (
+                <QuickTaskPopup
+                    open={quickTaskOpen}
+                    onOpenChange={setQuickTaskOpen}
+                    projectId={project.id}
+                />
+            )}
 
             {/* Contract PDF preview dialog */}
             <Dialog open={!!previewContract} onOpenChange={(open) => !open && setPreviewContract(null)}>

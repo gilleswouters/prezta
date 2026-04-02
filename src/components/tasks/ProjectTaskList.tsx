@@ -4,7 +4,7 @@ import type { Task, TaskPriority } from '@/types/task';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Plus, Trash2, Loader2, CheckSquare, Square } from 'lucide-react';
+import { Plus, Trash2, Loader2, CheckSquare, Square, Euro } from 'lucide-react';
 import { format, parseISO, isBefore, startOfDay } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { toast } from 'sonner';
@@ -36,6 +36,9 @@ export function ProjectTaskList({ projectId }: ProjectTaskListProps) {
     const [newTitle, setNewTitle] = useState('');
     const [newPriority, setNewPriority] = useState<TaskPriority>('medium');
     const [newDate, setNewDate] = useState('');
+    const [newFacturable, setNewFacturable] = useState(false);
+    const [newPrixEstime, setNewPrixEstime] = useState('');
+    const [newInclusDevis, setNewInclusDevis] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -51,10 +54,16 @@ export function ProjectTaskList({ projectId }: ProjectTaskListProps) {
                 status: 'todo',
                 project_id: projectId,
                 due_date: newDate || null,
+                facturable: newFacturable,
+                prix_estime: newFacturable && newPrixEstime ? parseFloat(newPrixEstime) : null,
+                inclus_devis: newFacturable ? newInclusDevis : false,
             });
             setNewTitle('');
             setNewDate('');
             setNewPriority('medium');
+            setNewFacturable(false);
+            setNewPrixEstime('');
+            setNewInclusDevis(false);
             inputRef.current?.focus();
         } catch (error) {
             toast.error('Impossible d\'ajouter la tâche', {
@@ -102,43 +111,82 @@ export function ProjectTaskList({ projectId }: ProjectTaskListProps) {
             </div>
 
             {/* Inline Add Form */}
-            <form onSubmit={handleAdd} className="flex flex-col sm:flex-row gap-2 bg-surface2/60 border border-border rounded-xl p-3">
-                <Input
-                    ref={inputRef}
-                    value={newTitle}
-                    onChange={e => setNewTitle(e.target.value)}
-                    placeholder="Ajouter une tâche... (↵ pour valider)"
-                    className="flex-1 bg-white border-border h-9 text-sm"
-                    disabled={isSubmitting}
-                />
-                <Select value={newPriority} onValueChange={(v: TaskPriority) => setNewPriority(v)}>
-                    <SelectTrigger className="w-full sm:w-32 h-9 bg-white border-border text-sm">
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="high">Haute</SelectItem>
-                        <SelectItem value="medium">Normale</SelectItem>
-                        <SelectItem value="low">Basse</SelectItem>
-                    </SelectContent>
-                </Select>
-                <Input
-                    type="date"
-                    value={newDate}
-                    onChange={e => setNewDate(e.target.value)}
-                    className="w-full sm:w-40 h-9 bg-white border-border text-sm"
-                    disabled={isSubmitting}
-                />
-                <Button
-                    type="submit"
-                    disabled={!newTitle.trim() || isSubmitting}
-                    className="bg-brand text-white hover:bg-brand-hover h-9 px-4 shrink-0"
-                >
-                    {isSubmitting ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                        <Plus className="h-4 w-4" />
+            <form onSubmit={handleAdd} className="flex flex-col gap-2 bg-surface2/60 border border-border rounded-xl p-3">
+                <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                        ref={inputRef}
+                        value={newTitle}
+                        onChange={e => setNewTitle(e.target.value)}
+                        placeholder="Ajouter une tâche... (↵ pour valider)"
+                        className="flex-1 bg-white border-border h-9 text-sm"
+                        disabled={isSubmitting}
+                    />
+                    <Select value={newPriority} onValueChange={(v: TaskPriority) => setNewPriority(v)}>
+                        <SelectTrigger className="w-full sm:w-32 h-9 bg-white border-border text-sm">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="high">Haute</SelectItem>
+                            <SelectItem value="medium">Normale</SelectItem>
+                            <SelectItem value="low">Basse</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Input
+                        type="date"
+                        value={newDate}
+                        onChange={e => setNewDate(e.target.value)}
+                        className="w-full sm:w-40 h-9 bg-white border-border text-sm"
+                        disabled={isSubmitting}
+                    />
+                    <Button
+                        type="submit"
+                        disabled={!newTitle.trim() || isSubmitting}
+                        className="bg-brand text-white hover:bg-brand-hover h-9 px-4 shrink-0"
+                    >
+                        {isSubmitting ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                            <Plus className="h-4 w-4" />
+                        )}
+                    </Button>
+                </div>
+                {/* Billable options */}
+                <div className="flex items-center gap-4 px-1">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-xs text-text-muted hover:text-text-primary">
+                        <input
+                            type="checkbox"
+                            checked={newFacturable}
+                            onChange={e => setNewFacturable(e.target.checked)}
+                            className="h-3.5 w-3.5 accent-amber-500"
+                        />
+                        Facturable
+                    </label>
+                    {newFacturable && (
+                        <>
+                            <label className="flex items-center gap-1.5 text-xs text-text-muted">
+                                <Euro className="h-3 w-3" />
+                                <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="Prix estimé"
+                                    value={newPrixEstime}
+                                    onChange={e => setNewPrixEstime(e.target.value)}
+                                    className="w-28 h-7 bg-white border-border text-xs px-2"
+                                />
+                            </label>
+                            <label className="flex items-center gap-1.5 cursor-pointer text-xs text-text-muted hover:text-text-primary">
+                                <input
+                                    type="checkbox"
+                                    checked={newInclusDevis}
+                                    onChange={e => setNewInclusDevis(e.target.checked)}
+                                    className="h-3.5 w-3.5 accent-brand"
+                                />
+                                Inclure dans devis
+                            </label>
+                        </>
                     )}
-                </Button>
+                </div>
             </form>
 
             {/* Task List */}
@@ -226,6 +274,14 @@ function TaskRow({ task, onToggle, onDelete }: TaskRowProps) {
             <span className={`flex-1 text-sm font-medium truncate ${done ? 'line-through text-text-muted' : 'text-text-primary'}`}>
                 {task.title}
             </span>
+
+            {/* Facturable badge */}
+            {task.facturable && (
+                <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline bg-amber-100 text-amber-700 border border-amber-200">
+                    {task.inclus_devis ? '€ devis' : '€'}
+                    {task.prix_estime ? ` ${task.prix_estime.toFixed(0)}€` : ''}
+                </span>
+            )}
 
             {/* Priority badge */}
             <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider hidden sm:inline ${PRIORITY_BADGE[task.priority]}`}>

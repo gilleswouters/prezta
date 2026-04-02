@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Plus, Loader2, Trash2, FolderPlus, CheckCircle2, Clock, FileText } from 'lucide-react';
-import { toast } from 'sonner';
 
 export default function ProjectsPage() {
     const { data: projects, isLoading } = useProjects();
