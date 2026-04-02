@@ -299,16 +299,6 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                         </div>
                     </div>
 
-                    <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={handleShare} className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 border-indigo-200">
-                            <Share2 className="h-4 w-4 mr-2" />
-                            Portail Client
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={onEdit}>
-                            <Pencil className="h-4 w-4 mr-2" />
-                            Modifier
-                        </Button>
-                    </div>
                 </div>
 
                 {/* Dashboard Tabs */}
@@ -527,7 +517,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                         <p className="text-sm text-text-muted">Gérez le devis et son envoi pour signature.</p>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => navigate(`/projets/${project.id}/devis`)} className="text-brand border-brand/30 hover:bg-brand-light">
-                                        <Plus className="h-4 w-4 mr-1" /> {quote ? 'Modifier' : 'Nouveau devis'}
+                                        <Plus className="h-4 w-4 mr-1" /> Nouveau devis
                                     </Button>
                                 </div>
 
@@ -572,6 +562,15 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                 </div>
 
                                                 <div className="flex items-center gap-2 flex-wrap">
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 text-xs text-text-muted hover:text-brand hover:bg-brand-light"
+                                                        onClick={() => navigate(`/projets/${project.id}/devis`)}
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                                                        Modifier
+                                                    </Button>
                                                     <Button
                                                         size="sm"
                                                         variant="ghost"
