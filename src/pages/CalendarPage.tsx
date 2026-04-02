@@ -110,9 +110,9 @@ export default function CalendarPage() {
             icon = <AlertCircle className={`h-3 w-3 ${item.status === 'late' ? 'text-red-500' : 'text-orange-500'}`} />;
             titleColor = item.status === 'late' ? "text-red-800" : "text-orange-800";
         } else if (isTask) {
-            bgClass = item.status === 'done' ? "bg-emerald-50 border-emerald-200 opacity-60" : "bg-brand-light border-brand-border";
-            icon = item.status === 'done' ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Clock className="h-3 w-3 text-brand" />;
-            titleColor = item.status === 'done' ? "text-emerald-800 line-through" : "text-brand";
+            bgClass = item.status === 'done' ? "bg-emerald-50 border-emerald-200 opacity-60" : "bg-amber-50 border-amber-200";
+            icon = item.status === 'done' ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <Clock className="h-3 w-3 text-amber-600" />;
+            titleColor = item.status === 'done' ? "text-emerald-800 line-through" : "text-amber-800";
         } else if (isProject) {
             bgClass = item.status === 'done' ? "bg-emerald-50 border-emerald-200 opacity-60" : "bg-blue-50 border-blue-200";
             icon = item.status === 'done' ? <CheckCircle2 className="h-3 w-3 text-emerald-500" /> : <FileText className="h-3 w-3 text-blue-500" />;

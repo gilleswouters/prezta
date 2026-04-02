@@ -6,12 +6,13 @@ import { CataloguePickerModal } from '@/components/quotes/CataloguePickerModal';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { ArrowLeft, Save, Plus, Sparkles, Loader2, Play, Trash2, Eye, Edit3, Download, Receipt, Send, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Sparkles, Loader2, Play, Trash2, Eye, Edit3, Download, Receipt, Send, AlertCircle, FolderKanban } from 'lucide-react';
 import { generateDocumentName } from '@/lib/document-naming';
 import { Unit } from '@/types/product';
 import { trackEvent } from '@/lib/plausible';
 import { useDeleteProject, useProjectById } from '@/hooks/useProjects';
 import { useQuoteByProject, useSaveQuote, useUpdateQuoteStatus } from '@/hooks/useQuotes';
+import { useTasks } from '@/hooks/useTasks';
 import { useProfile } from '@/hooks/useProfile';
 import { useCreateInvoice } from '@/hooks/useInvoices';
 import { InvoiceStatus } from '@/types/invoice';
@@ -33,6 +34,7 @@ export default function QuoteBuilderPage() {
     const saveQuote = useSaveQuote();
     const createInvoice = useCreateInvoice();
     const updateQuoteStatus = useUpdateQuoteStatus();
+    const { data: projectTasks, createTask } = useTasks(id);
 
     const [aiBrief, setAiBrief] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
@@ -102,12 +104,58 @@ export default function QuoteBuilderPage() {
         }
     };
 
+    const handleImportFromTasks = () => {
+        if (!projectTasks || projectTasks.length === 0) {
+            toast.info('Aucune tâche trouvée pour ce projet.');
+            return;
+        }
+        const activeTasks = projectTasks.filter(t => t.status !== 'done');
+        if (activeTasks.length === 0) {
+            toast.info('Toutes les tâches sont déjà terminées.');
+            return;
+        }
+        activeTasks.forEach(task => {
+            store.addLine();
+            const newLine = store.data.lines[store.data.lines.length - 1];
+            if (newLine) {
+                store.updateLine(newLine.id, {
+                    name: task.title,
+                    description: task.description || '',
+                    quantity: 1,
+                    unitPrice: 0,
+                    tvaRate: 20,
+                    unit: 'forfait' as const,
+                });
+            }
+        });
+        toast.success(`${activeTasks.length} tâche(s) importée(s) en lignes de devis.`);
+    };
+
     const handleSave = async () => {
         if (!id) return;
         const isNew = !dbQuote;
         saveQuote.mutate({ projectId: id, payload: store.data }, {
-            onSuccess: () => {
-                if (isNew) trackEvent('quote_created');
+            onSuccess: async () => {
+                if (isNew) {
+                    trackEvent('quote_created');
+                    // Auto-create tasks from quote lines for new quotes
+                    for (const line of store.data.lines) {
+                        if (line.name && line.name.trim()) {
+                            try {
+                                await createTask({
+                                    title: line.name,
+                                    description: line.description || null,
+                                    status: 'todo',
+                                    priority: 'medium',
+                                    project_id: id,
+                                    due_date: null,
+                                });
+                            } catch {
+                                // Non-blocking — task creation failure doesn't affect quote
+                            }
+                        }
+                    }
+                }
             },
         });
     };
@@ -138,8 +186,8 @@ export default function QuoteBuilderPage() {
                 paid_date: null,
                 notes: `Facture générée depuis le devis: ${store.data.title}`
             });
-            // On navigue vers la page registre pour que l'utilisateur puisse vérifier
-            navigate('/registre');
+            toast.success('Facture créée avec succès !');
+            navigate(`/projets?open=${id}`);
         } catch (error) {
             console.error("Erreur conversion", error);
         }
@@ -226,10 +274,16 @@ export default function QuoteBuilderPage() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-b border-border pb-6">
                 <div className="flex items-center gap-4 w-full">
-                    <Button variant="ghost" size="icon" className="text-text-text-muted hover:bg-surface-hover shrink-0" onClick={() => navigate(-1)}>
+                    <Button variant="ghost" size="icon" className="text-text-text-muted hover:bg-surface-hover shrink-0" onClick={() => navigate(`/projets?open=${id}`)}>
                         <ArrowLeft className="h-5 w-5" />
                     </Button>
                     <div className="flex-1 w-full max-w-sm">
+                        {project?.name && (
+                            <p className="text-xs text-text-muted font-medium mb-0.5 px-2 -ml-2 flex items-center gap-1">
+                                <span className="opacity-50">Projet :</span>
+                                <span className="font-semibold text-text-primary truncate">{project.name}</span>
+                            </p>
+                        )}
                         <Input
                             value={store.data.title}
                             onChange={(e) => store.updateMetadata(e.target.value, store.data.notes)}
@@ -333,6 +387,18 @@ export default function QuoteBuilderPage() {
                             </Button>
 
                             <CataloguePickerModal />
+
+                            {projectTasks && projectTasks.filter(t => t.status !== 'done').length > 0 && (
+                                <Button
+                                    variant="outline"
+                                    className="border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100 text-sm font-semibold h-10 shrink-0"
+                                    onClick={handleImportFromTasks}
+                                    title="Importer les tâches actives comme lignes de devis"
+                                >
+                                    <FolderKanban className="h-4 w-4 mr-2" />
+                                    Depuis les tâches
+                                </Button>
+                            )}
                         </div>
 
                         <div className="pt-8">

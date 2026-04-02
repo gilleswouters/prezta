@@ -17,7 +17,7 @@ import {
     TableRow
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Plus, Loader2, Trash2, FolderPlus, CheckCircle2, Clock, FileText, Share2, LayoutDashboard, Pencil, FolderKanban, FileSignature } from 'lucide-react';
+import { Plus, Loader2, Trash2, FolderPlus, CheckCircle2, Clock, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ProjectsPage() {
@@ -189,37 +189,6 @@ export default function ProjectsPage() {
                                         </TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex items-center justify-end gap-1">
-                                                <Button variant="ghost" size="icon" onClick={() => { setEditingProject(project); setEditModalOpen(true); }} className="h-8 w-8 text-text-muted hover:text-[var(--brand)] hover:bg-[var(--brand)]/10" title="Modifier">
-                                                    <Pencil className="h-4 w-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => openDashboard(project, "tasks")} className="h-8 w-8 text-text-muted hover:text-[var(--brand)] hover:bg-[var(--brand)]/10 hidden sm:inline-flex" title="Tâches">
-                                                    <FolderKanban className="h-4 w-4" />
-                                                </Button>
-                                                <Button variant="ghost" size="icon" onClick={() => openDashboard(project, "documents")} className="h-8 w-8 text-text-muted hover:text-blue-600 hover:bg-blue-50 hidden md:inline-flex" title="Contrats & Devis">
-                                                    <FileSignature className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => {
-                                                        const url = `${window.location.origin}/portal/${project.portal_link}`;
-                                                        navigator.clipboard.writeText(url);
-                                                        toast.success("Lien client copié !", { description: "Le lien magique est prêt à être envoyé à votre client." });
-                                                    }}
-                                                    className="h-8 w-8 text-text-muted hover:text-indigo-600 hover:bg-indigo-50 hidden lg:inline-flex"
-                                                    title="Partager le lien client"
-                                                >
-                                                    <Share2 className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="icon"
-                                                    onClick={() => openDashboard(project)}
-                                                    className="h-8 w-8 text-[var(--brand)] hover:text-white hover:bg-[var(--brand)] transition-colors"
-                                                    title="Ouvrir le dossier complet"
-                                                >
-                                                    <LayoutDashboard className="h-4 w-4" />
-                                                </Button>
                                                 <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(project.id, project.name)} className="h-8 w-8 text-text-muted hover:text-danger hover:bg-danger-light" title="Supprimer">
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>

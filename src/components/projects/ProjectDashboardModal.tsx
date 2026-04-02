@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ProjectTaskList } from '@/components/tasks/ProjectTaskList';
+import { useTasks } from '@/hooks/useTasks';
 import { SendForSignatureModal } from '@/components/contracts/SendForSignatureModal';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -44,6 +45,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
 
     // Fetch all project documents
+    const { data: tasks } = useTasks(project?.id);
     const { data: quote, isLoading: quoteLoading } = useQuoteByProject(project?.id);
     const { data: contracts, isLoading: contractsLoading } = useProjectContracts(project?.id);
     const { data: invoices, isLoading: invoicesLoading } = useInvoices(project?.id);
@@ -457,6 +459,58 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 </div>
 
                             </div>
+
+                            {/* Task mini-pipeline below cards */}
+                            {tasks && tasks.length > 0 && (() => {
+                                const todoTasks = tasks.filter(t => t.status === 'todo');
+                                const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'review');
+                                const doneTasks = tasks.filter(t => t.status === 'done');
+                                return (
+                                    <div className="mt-4 bg-white rounded-xl border border-border p-4 shadow-sm">
+                                        <div className="flex items-center justify-between mb-3">
+                                            <h3 className="font-bold text-sm text-text-primary flex items-center gap-2">
+                                                <FolderKanban className="h-4 w-4 text-text-muted" />
+                                                Pipeline des tâches
+                                            </h3>
+                                            <button
+                                                onClick={() => setActiveTab('tasks')}
+                                                className="text-xs text-brand hover:underline font-medium"
+                                            >
+                                                Voir tout ({tasks.length})
+                                            </button>
+                                        </div>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {[
+                                                { label: 'À faire', items: todoTasks, color: 'text-text-muted', dot: 'bg-gray-300' },
+                                                { label: 'En cours', items: inProgressTasks, color: 'text-blue-700', dot: 'bg-blue-400' },
+                                                { label: 'Terminées', items: doneTasks, color: 'text-emerald-700', dot: 'bg-emerald-400' },
+                                            ].map(col => (
+                                                <div key={col.label}>
+                                                    <div className="flex items-center gap-1.5 mb-2">
+                                                        <span className={`h-2 w-2 rounded-full shrink-0 ${col.dot}`} />
+                                                        <p className={`text-[10px] font-bold uppercase tracking-wider ${col.color}`}>
+                                                            {col.label} ({col.items.length})
+                                                        </p>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        {col.items.slice(0, 3).map(t => (
+                                                            <p key={t.id} className="text-xs text-text-primary truncate bg-surface2/60 rounded px-2 py-1 border border-border/50">
+                                                                {t.title}
+                                                            </p>
+                                                        ))}
+                                                        {col.items.length > 3 && (
+                                                            <p className="text-[10px] text-text-muted pl-2">+{col.items.length - 3} de plus</p>
+                                                        )}
+                                                        {col.items.length === 0 && (
+                                                            <p className="text-[10px] text-text-muted italic pl-2">Aucune</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </TabsContent>
 
                         <TabsContent value="tasks" className="m-0 focus-visible:outline-none h-full">
@@ -473,7 +527,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                         <p className="text-sm text-text-muted">Gérez le devis et son envoi pour signature.</p>
                                     </div>
                                     <Button variant="outline" size="sm" onClick={() => navigate(`/projets/${project.id}/devis`)} className="text-brand border-brand/30 hover:bg-brand-light">
-                                        <Plus className="h-4 w-4 mr-1" /> {quote ? 'Modifier' : 'Créer un devis'}
+                                        <Plus className="h-4 w-4 mr-1" /> {quote ? 'Modifier' : 'Nouveau devis'}
                                     </Button>
                                 </div>
 

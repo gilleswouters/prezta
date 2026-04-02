@@ -101,13 +101,14 @@ export function ContractGenerator({ open, onOpenChange, project, versionOf, vers
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] flex flex-col bg-white border-border">
+            <DialogContent className="sm:max-w-[900px] max-h-[90vh] flex flex-col bg-white border-border">
                 <DialogHeader>
                     <DialogTitle className="font-serif text-2xl flex items-center gap-2">
                         <FileText className="h-6 w-6 text-brand" />
                         Générer un contrat
                     </DialogTitle>
                     <DialogDescription>
+                        {project?.name && <span className="font-semibold text-text-primary">{project.name} — </span>}
                         Choisissez un modèle adapté à votre juridiction pour sécuriser ce projet.
                     </DialogDescription>
                 </DialogHeader>
