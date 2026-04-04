@@ -16,7 +16,7 @@ import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { useQuotesByProject, useDuplicateQuote, useUpdateQuoteStatus, type Quote } from '@/hooks/useQuotes';
+import { useQuotesByProject, useDuplicateQuote, useUpdateQuoteStatus, useSaveQuote, type Quote } from '@/hooks/useQuotes';
 import { useProjectContracts } from '@/hooks/useContracts';
 import { useInvoices } from '@/hooks/useInvoices';
 import { useProfile } from '@/hooks/useProfile';
@@ -53,6 +53,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     const { data: profile } = useProfile();
     const updateQuoteStatus = useUpdateQuoteStatus();
     const duplicateQuote = useDuplicateQuote();
+    const saveQuote = useSaveQuote();
     const queryClient = useQueryClient();
     const { user } = useAuth();
 
@@ -61,6 +62,48 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
 
     // Quick task popup
     const [quickTaskOpen, setQuickTaskOpen] = React.useState(false);
+
+    // Devis tab: live task selection state (qty + price overrides per task)
+    type TaskLineOverride = { qty: number; price: string };
+    const [taskLineOverrides, setTaskLineOverrides] = React.useState<Record<string, TaskLineOverride>>({});
+
+    const selectedTasks = React.useMemo(
+        () => (tasks ?? []).filter(t => (t.inclus_devis ?? false)),
+        [tasks]
+    );
+
+    const getTaskLine = (task: { id: string; prix_estime?: number | null }): TaskLineOverride =>
+        taskLineOverrides[task.id] ?? { qty: 1, price: task.prix_estime?.toString() ?? '0' };
+
+    const handleGenerateQuote = async () => {
+        if (!project || !selectedTasks.length) return;
+        const maxVer = quotes && quotes.length > 0
+            ? Math.max(...quotes.map(q => q.version ?? 0))
+            : 0;
+        const newVersion = maxVer + 1;
+
+        const lines: QuoteLine[] = selectedTasks.map(t => {
+            const lv = getTaskLine(t);
+            return {
+                id: crypto.randomUUID(),
+                description: t.title,
+                quantity: lv.qty,
+                unitPrice: parseFloat(lv.price) || 0,
+                tvaRate: 20,
+                unit: 'forfait',
+            };
+        });
+
+        const payload: QuoteData = {
+            title: `Devis v${newVersion} — ${project.name}`,
+            projectId: project.id,
+            lines,
+            notes: '',
+            version: newVersion,
+        };
+
+        await saveQuote.mutateAsync({ projectId: project.id, payload });
+    };
 
     // Devis tab: FIRMA send — tracks which quote is being sent
     const [quoteSendTarget, setQuoteSendTarget] = React.useState<Quote | null>(null);
@@ -537,16 +580,133 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="quotes" className="m-0 focus-visible:outline-none">
+                        <TabsContent value="quotes" className="m-0 focus-visible:outline-none space-y-6">
+                            {/* Section 1 — Live selected tasks */}
                             <div className="bg-white rounded-xl border border-border shadow-sm p-6">
-                                <div className="flex items-center justify-between mb-6 border-b border-border pb-4">
+                                <div className="flex items-center justify-between mb-4 border-b border-border pb-4">
                                     <div>
-                                        <h3 className="font-bold text-lg text-text-primary">Devis du projet</h3>
-                                        <p className="text-sm text-text-muted">Gérez les versions de devis et leur envoi pour signature.</p>
+                                        <h3 className="font-bold text-base text-text-primary">Tâches sélectionnées pour ce devis</h3>
+                                        <p className="text-xs text-text-muted mt-0.5">
+                                            Cochez ☑ dans l'onglet <button type="button" onClick={() => setActiveTab('tasks')} className="text-brand hover:underline font-medium">Pipeline des Tâches</button> pour ajouter des prestations ici.
+                                        </p>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={() => navigate(`/projets/${project.id}/devis`)} className="text-brand border-brand/30 hover:bg-brand-light">
-                                        <Plus className="h-4 w-4 mr-1" /> Nouveau devis
-                                    </Button>
+                                </div>
+
+                                {selectedTasks.length === 0 ? (
+                                    <div className="py-10 text-center border-2 border-dashed border-border rounded-xl bg-surface/50">
+                                        <CheckSquare className="h-8 w-8 text-text-muted opacity-20 mx-auto mb-2" />
+                                        <p className="font-medium text-text-primary text-sm mb-1">Aucune tâche sélectionnée</p>
+                                        <p className="text-xs text-text-muted">
+                                            Cochez des tâches dans l'onglet{' '}
+                                            <button type="button" onClick={() => setActiveTab('tasks')} className="text-brand hover:underline font-medium">Pipeline des Tâches</button>
+                                            {' '}pour les ajouter ici.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-sm">
+                                                <thead>
+                                                    <tr className="border-b border-border text-left">
+                                                        <th className="pb-2 text-xs font-semibold text-text-muted pr-3">Tâche</th>
+                                                        <th className="pb-2 text-xs font-semibold text-text-muted w-16 text-center">Qté</th>
+                                                        <th className="pb-2 text-xs font-semibold text-text-muted w-28 text-right">Prix unit. HT</th>
+                                                        <th className="pb-2 text-xs font-semibold text-text-muted w-24 text-right">Total HT</th>
+                                                        <th className="pb-2 text-xs font-semibold text-text-muted w-12 text-right">TVA</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-border/50">
+                                                    {selectedTasks.map(t => {
+                                                        const lv = getTaskLine(t);
+                                                        const totalHT = lv.qty * (parseFloat(lv.price) || 0);
+                                                        return (
+                                                            <tr key={t.id} className="hover:bg-surface/50">
+                                                                <td className="py-2 pr-3 font-medium text-text-primary">{t.title}</td>
+                                                                <td className="py-2 text-center">
+                                                                    <input
+                                                                        type="number"
+                                                                        min="1"
+                                                                        value={lv.qty}
+                                                                        onChange={e => setTaskLineOverrides(prev => ({
+                                                                            ...prev,
+                                                                            [t.id]: { ...getTaskLine(t), qty: Math.max(1, parseInt(e.target.value) || 1) }
+                                                                        }))}
+                                                                        className="w-14 h-7 text-center text-xs rounded border border-border bg-white focus:outline-none focus:ring-1 focus:ring-brand/40"
+                                                                    />
+                                                                </td>
+                                                                <td className="py-2 text-right">
+                                                                    <div className="flex items-center justify-end gap-1">
+                                                                        <input
+                                                                            type="number"
+                                                                            min="0"
+                                                                            step="0.01"
+                                                                            value={lv.price}
+                                                                            onChange={e => setTaskLineOverrides(prev => ({
+                                                                                ...prev,
+                                                                                [t.id]: { ...getTaskLine(t), price: e.target.value }
+                                                                            }))}
+                                                                            className="w-24 h-7 text-right text-xs rounded border border-border bg-white focus:outline-none focus:ring-1 focus:ring-brand/40 px-2"
+                                                                        />
+                                                                        <span className="text-xs text-text-muted shrink-0">€</span>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="py-2 text-right text-xs font-semibold text-text-primary">
+                                                                    {totalHT.toFixed(2)} €
+                                                                </td>
+                                                                <td className="py-2 text-right text-xs text-text-muted">20%</td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Totals */}
+                                        {(() => {
+                                            const totalHT = selectedTasks.reduce((sum, t) => {
+                                                const lv = getTaskLine(t);
+                                                return sum + lv.qty * (parseFloat(lv.price) || 0);
+                                            }, 0);
+                                            const tva = totalHT * 0.20;
+                                            return (
+                                                <div className="mt-4 pt-3 border-t border-border space-y-1 text-right text-sm">
+                                                    <div className="flex justify-end gap-8">
+                                                        <span className="text-text-muted">Total HT</span>
+                                                        <span className="font-semibold w-24">{totalHT.toFixed(2)} €</span>
+                                                    </div>
+                                                    <div className="flex justify-end gap-8">
+                                                        <span className="text-text-muted">TVA (20%)</span>
+                                                        <span className="w-24">{tva.toFixed(2)} €</span>
+                                                    </div>
+                                                    <div className="flex justify-end gap-8 text-base font-bold border-t border-border pt-2 mt-1">
+                                                        <span>Total TTC</span>
+                                                        <span className="w-24">{(totalHT + tva).toFixed(2)} €</span>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })()}
+
+                                        <Button
+                                            onClick={handleGenerateQuote}
+                                            disabled={saveQuote.isPending}
+                                            className="w-full mt-5 bg-brand text-white hover:bg-brand-hover"
+                                        >
+                                            {saveQuote.isPending ? (
+                                                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                                            ) : (
+                                                <FileText className="h-4 w-4 mr-2" />
+                                            )}
+                                            Générer le devis final ({selectedTasks.length} prestation{selectedTasks.length !== 1 ? 's' : ''})
+                                        </Button>
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Section 2 — Generated quotes history */}
+                            <div className="bg-white rounded-xl border border-border shadow-sm p-6">
+                                <div className="mb-4 border-b border-border pb-4">
+                                    <h3 className="font-bold text-base text-text-primary">Devis générés</h3>
+                                    <p className="text-xs text-text-muted mt-0.5">Historique des versions de devis pour ce projet.</p>
                                 </div>
 
                                 {quoteLoading ? (
