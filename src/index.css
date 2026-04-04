@@ -122,3 +122,18 @@
   --color-destructive: var(--destructive);
   --color-ring: var(--ring);
 }
+
+/* ── Radix UI overlay fix ────────────────────────────────────────────────────
+   Ensure all Radix portals (selects, dropdowns, popovers) render above modals
+   with a solid opaque white background — even when Tailwind's bg-popover CSS
+   variable resolves incorrectly due to the hex-vs-HSL mismatch.               */
+[data-radix-popper-content-wrapper] {
+  z-index: 200 !important;
+}
+
+[data-radix-select-content],
+[data-radix-dropdown-menu-content],
+[data-radix-popover-content] {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+}
