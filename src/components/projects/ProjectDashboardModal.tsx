@@ -14,7 +14,6 @@ import { fr } from 'date-fns/locale';
 import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock, Download, Archive, Send, AlertCircle, Loader2, Eye, Copy, CheckSquare } from 'lucide-react';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
 import { toast } from 'sonner';
-import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useQuotesByProject, useDuplicateQuote, useUpdateQuoteStatus, useSaveQuote, type Quote } from '@/hooks/useQuotes';
 import { useProjectContracts } from '@/hooks/useContracts';
@@ -28,6 +27,7 @@ import { PDFDownloadLink, pdf, PDFViewer } from '@react-pdf/renderer';
 import { QuotePDFDocument } from '@/components/quotes/pdf/QuotePDFDocument';
 import { ContractPDFDocument } from '@/components/contracts/pdf/ContractPDFDocument';
 import { InvoicePDFDocument } from '@/components/invoices/pdf/InvoicePDFDocument';
+import { QuoteBuilderModal } from '@/components/quotes/QuoteBuilderModal';
 import type { QuoteData, QuoteLine, QuoteTotals } from '@/types/quote';
 import type { ProjectContract } from '@/types/contract';
 import type { Invoice } from '@/types/invoice';
@@ -42,7 +42,6 @@ interface ProjectDashboardModalProps {
 }
 
 export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onOpenContracts, defaultTab = "overview" }: ProjectDashboardModalProps) {
-    const navigate = useNavigate();
     const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
 
     // Fetch all project documents
@@ -117,6 +116,15 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     const [quotePreviewTarget, setQuotePreviewTarget] = React.useState<Quote | null>(null);
     const [previewContract, setPreviewContract] = React.useState<ProjectContract | null>(null);
     const [previewInvoice, setPreviewInvoice] = React.useState<Invoice | null>(null);
+
+    // Quote builder modal (inline editor — no navigation)
+    const [quoteBuilderQuoteId, setQuoteBuilderQuoteId] = React.useState<string | undefined>(undefined);
+    const [quoteBuilderOpen, setQuoteBuilderOpen] = React.useState(false);
+
+    const openQuoteBuilder = (quoteId?: string) => {
+        setQuoteBuilderQuoteId(quoteId);
+        setQuoteBuilderOpen(true);
+    };
 
     React.useEffect(() => {
         if (open) {
@@ -310,7 +318,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
         if (q.status === 'sent' || q.status === 'lu' || q.status === 'accepted') {
             setVersionConfirmQuote(q);
         } else {
-            navigate(`/projets/${project?.id}/devis?q=${q.id}`);
+            openQuoteBuilder(q.id);
         }
     };
 
@@ -320,7 +328,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
             const newQuote = await duplicateQuote.mutateAsync({ quoteId: versionConfirmQuote.id });
             setVersionConfirmQuote(null);
             toast.success(`Version v${newQuote.version} créée.`);
-            navigate(`/projets/${project?.id}/devis?q=${newQuote.id}`);
+            openQuoteBuilder(newQuote.id);
         } catch {
             // error toast handled in hook
         }
@@ -328,7 +336,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
 
     const handleModifyAnyway = () => {
         if (!versionConfirmQuote) return;
-        navigate(`/projets/${project?.id}/devis?q=${versionConfirmQuote.id}`);
+        openQuoteBuilder(versionConfirmQuote.id);
         setVersionConfirmQuote(null);
     };
 
@@ -911,7 +919,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                         <p className="text-sm text-text-muted">Retrouvez l'historique légal et financier lié à ce projet.</p>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => navigate(`/projets/${project.id}/devis`)} className="text-orange-600 border-orange-200 hover:bg-orange-50">
+                                        <Button variant="outline" size="sm" onClick={() => openQuoteBuilder()} className="text-orange-600 border-orange-200 hover:bg-orange-50">
                                             <Plus className="h-4 w-4 mr-1" /> Devis / Facture
                                         </Button>
                                         <Button variant="outline" size="sm" onClick={onOpenContracts} className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
@@ -989,7 +997,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                                 className="h-8 hover:bg-surface border border-transparent hover:border-border"
                                                                 onClick={() => {
                                                                     if (doc.type === 'contract') onOpenContracts();
-                                                                    else navigate(`/projets/${project.id}/devis`);
+                                                                    else openQuoteBuilder(doc.id);
                                                                 }}
                                                             >
                                                                 Gérer <LayoutDashboard className="h-3 w-3 ml-2 opacity-50" />
@@ -1016,6 +1024,17 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                     open={quickTaskOpen}
                     onOpenChange={setQuickTaskOpen}
                     projectId={project.id}
+                />
+            )}
+
+            {/* Quote builder modal — inline editor, no page navigation */}
+            {project && (
+                <QuoteBuilderModal
+                    open={quoteBuilderOpen}
+                    onOpenChange={setQuoteBuilderOpen}
+                    projectId={project.id}
+                    quoteId={quoteBuilderQuoteId}
+                    projectName={project.name}
                 />
             )}
 
