@@ -15,8 +15,9 @@ export interface QuoteLine {
     description?: string;
     quantity: number;
     unitPrice: number;
-    tvaRate: number;
+    tvaRate: number; // -1 = exonéré
     unit: Unit;
+    unite_custom?: string; // when unit = 'autre'
 }
 
 export interface QuoteData {

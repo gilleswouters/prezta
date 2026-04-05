@@ -89,7 +89,7 @@ export default function AppLayout() {
             group: 'Catalogues',
             items: [
                 { label: 'Clients', path: '/clients', icon: <Users className="h-4 w-4" /> },
-                { label: 'Bibliothèque', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
+                { label: 'Prestations', path: '/catalogue', icon: <BookOpen className="h-4 w-4" /> },
                 { label: 'Fournisseurs', path: '/fournisseurs', icon: <Truck className="h-4 w-4" /> },
             ]
         },

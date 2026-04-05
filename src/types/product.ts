@@ -2,7 +2,14 @@ export const Unit = {
     HEURE: 'heure',
     FORFAIT: 'forfait',
     PIECE: 'pièce',
-    JOUR: 'jour'
+    JOUR: 'jour',
+    DEMI_JOUR: 'demi-jour',
+    UNITE: 'unite',
+    M2: 'm2',
+    KM: 'km',
+    MOT: 'mot',
+    PAGE: 'page',
+    AUTRE: 'autre',
 } as const;
 
 export type Unit = typeof Unit[keyof typeof Unit];

@@ -77,6 +77,15 @@ export default function QuoteBuilderPage() {
 
     const { subtotalHT, tvaAmounts, totalTVA, totalTTC } = store.getTotals();
 
+    // Compute HT base per TVA rate for breakdown display
+    const tvaBaseAmounts: Record<string, number> = {};
+    store.data.lines.forEach(line => {
+        const key = line.tvaRate.toString();
+        if (!tvaBaseAmounts[key]) tvaBaseAmounts[key] = 0;
+        tvaBaseAmounts[key] += line.quantity * line.unitPrice;
+    });
+    const hasZeroTva = store.data.lines.some(l => l.tvaRate === 0);
+
     const handleAIGeneration = async () => {
         if (!aiBrief.trim()) {
             toast.error('Veuillez entrer un brief décrivant les prestations.');
@@ -470,11 +479,17 @@ export default function QuoteBuilderPage() {
                                     <span className="text-text-primary">{subtotalHT.toFixed(2)} €</span>
                                 </div>
 
-                                {Object.entries(tvaAmounts).map(([rate, amount]) => {
-                                    if (amount === 0) return null;
+                                {Object.entries(tvaBaseAmounts).map(([rate, base]) => {
+                                    const amount = tvaAmounts[rate] ?? 0;
+                                    const rateNum = parseFloat(rate);
+                                    const label = rateNum === -1
+                                        ? 'Exonéré de TVA'
+                                        : rateNum === 0
+                                        ? `0% — Auto-entrepreneur`
+                                        : `TVA ${rate}% (sur ${base.toFixed(2)} €)`;
                                     return (
                                         <div key={rate} className="flex justify-between text-text-muted text-xs">
-                                            <span>TVA ({rate}%)</span>
+                                            <span>{label}</span>
                                             <span>{amount.toFixed(2)} €</span>
                                         </div>
                                     );
@@ -490,6 +505,12 @@ export default function QuoteBuilderPage() {
                                 <span className="font-bold text-text-primary">Total TTC</span>
                                 <span className="text-2xl font-black text-brand tracking-tight">{totalTTC.toFixed(2)} €</span>
                             </div>
+
+                            {hasZeroTva && (
+                                <p className="mt-3 text-[10px] text-text-muted italic">
+                                    * TVA non applicable, art. 293B du CGI
+                                </p>
+                            )}
                         </div>
                     </div>
                 </div>

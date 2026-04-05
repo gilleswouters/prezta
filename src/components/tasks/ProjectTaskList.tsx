@@ -19,6 +19,8 @@ function isOverdue(task: Task): boolean {
     return isBefore(parseISO(task.due_date), startOfDay(new Date()));
 }
 
+const GRID_COLS = '24px 1fr 120px 100px 110px 80px 32px';
+
 export function ProjectTaskList({ projectId }: ProjectTaskListProps) {
     const { data: tasks, isLoading, createTask, updateTask, deleteTask } = useTasks(projectId);
 
@@ -87,7 +89,7 @@ export function ProjectTaskList({ projectId }: ProjectTaskListProps) {
                     )}
                 </h3>
                 <p className="text-xs text-text-muted hidden sm:block">
-                    Cochez <span className="font-semibold text-brand">☑</span> pour inclure dans le devis
+                    Cochez <span className="font-semibold text-brand">Devis</span> pour inclure dans le devis
                 </p>
             </div>
 
@@ -106,9 +108,15 @@ export function ProjectTaskList({ projectId }: ProjectTaskListProps) {
                         <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="high">🔴 Haute</SelectItem>
-                        <SelectItem value="medium">🟡 Normale</SelectItem>
-                        <SelectItem value="low">🟢 Basse</SelectItem>
+                        <SelectItem value="high">
+                            <span className="text-danger font-semibold">Haute</span>
+                        </SelectItem>
+                        <SelectItem value="medium">
+                            <span className="text-brand font-semibold">Normale</span>
+                        </SelectItem>
+                        <SelectItem value="low">
+                            <span className="text-text-muted">Basse</span>
+                        </SelectItem>
                     </SelectContent>
                 </Select>
                 <Input
@@ -127,16 +135,19 @@ export function ProjectTaskList({ projectId }: ProjectTaskListProps) {
                 </Button>
             </form>
 
-            {/* Column labels */}
+            {/* Column headers */}
             {tasks && tasks.length > 0 && (
-                <div className="hidden sm:grid grid-cols-[16px_1fr_auto_auto_auto_auto_auto] gap-2 items-center px-3 text-[10px] font-semibold text-text-muted uppercase tracking-wider">
-                    <span title="Inclure dans le devis">☑</span>
+                <div
+                    className="hidden sm:grid items-center gap-2 px-3 py-1 text-[10px] font-semibold text-text-muted uppercase tracking-wider border-b border-border"
+                    style={{ gridTemplateColumns: GRID_COLS }}
+                >
+                    <span />
                     <span>Tâche</span>
-                    <span className="w-[120px]">Statut</span>
-                    <span className="w-[100px] hidden md:block">Priorité</span>
-                    <span className="w-[60px] hidden lg:block">Échéance</span>
-                    <span className="w-[28px]" />
-                    <span className="w-[28px]" />
+                    <span>Statut</span>
+                    <span>Priorité</span>
+                    <span>Échéance</span>
+                    <span className="text-center">Devis</span>
+                    <span />
                 </div>
             )}
 
@@ -201,6 +212,12 @@ interface TaskRowProps {
     onEdit: (task: Task) => void;
 }
 
+const PRIORITY_DOT: Record<string, string> = {
+    high: 'bg-danger',
+    medium: 'bg-brand',
+    low: 'bg-text-muted',
+};
+
 function TaskRow({ task, onUpdate, onDelete, onEdit }: TaskRowProps) {
     const overdue = isOverdue(task);
     const done = task.status === 'done';
@@ -208,31 +225,30 @@ function TaskRow({ task, onUpdate, onDelete, onEdit }: TaskRowProps) {
 
     return (
         <div
-            className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-all group ${
+            className={`grid items-center gap-2 px-3 py-2 rounded-xl border transition-all group ${
                 inDevis
-                    ? 'bg-blue-50/60 border-blue-200/70 hover:border-blue-300'
+                    ? 'bg-blue-50/60 border-l-[3px] border-l-brand border-blue-200/70 hover:border-blue-300'
                     : done
                     ? 'bg-surface2/40 border-border/50 opacity-60'
                     : overdue
                     ? 'bg-warning-light/50 border-warning/30'
                     : 'bg-white border-border hover:border-brand/20 hover:shadow-sm'
             }`}
+            style={{ gridTemplateColumns: GRID_COLS }}
         >
-            {/* Inclus devis checkbox */}
-            <div title="Inclure dans le devis" className="shrink-0">
-                <input
-                    type="checkbox"
-                    checked={inDevis}
-                    onChange={e => onUpdate(task.id, { inclus_devis: e.target.checked })}
-                    className="h-4 w-4 accent-brand rounded cursor-pointer"
+            {/* Col 1 — priority dot */}
+            <div className="flex justify-center">
+                <span
+                    className={`h-2 w-2 rounded-full ${PRIORITY_DOT[task.priority] ?? 'bg-text-muted'}`}
+                    title={task.priority === 'high' ? 'Haute' : task.priority === 'medium' ? 'Normale' : 'Basse'}
                 />
             </div>
 
-            {/* Title — click opens edit modal */}
+            {/* Col 2 — title */}
             <button
                 type="button"
                 onClick={() => onEdit(task)}
-                className={`flex-1 text-sm font-medium truncate text-left ${done ? 'line-through text-text-muted' : 'text-text-primary hover:text-brand'}`}
+                className={`text-sm font-medium truncate text-left ${done ? 'line-through text-text-muted' : 'text-text-primary hover:text-brand'}`}
                 title={task.title}
             >
                 {task.title}
@@ -243,9 +259,9 @@ function TaskRow({ task, onUpdate, onDelete, onEdit }: TaskRowProps) {
                 )}
             </button>
 
-            {/* Status dropdown */}
+            {/* Col 3 — status dropdown */}
             <Select value={task.status} onValueChange={(v: TaskStatus) => onUpdate(task.id, { status: v })}>
-                <SelectTrigger className="w-[120px] h-7 text-xs bg-white border-border shrink-0 hidden sm:flex">
+                <SelectTrigger className="w-full h-7 text-xs bg-white border-border shrink-0 hidden sm:flex">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -255,42 +271,58 @@ function TaskRow({ task, onUpdate, onDelete, onEdit }: TaskRowProps) {
                 </SelectContent>
             </Select>
 
-            {/* Priority dropdown */}
+            {/* Col 4 — priority dropdown (text-only) */}
             <Select value={task.priority} onValueChange={(v: TaskPriority) => onUpdate(task.id, { priority: v })}>
-                <SelectTrigger className="w-[100px] h-7 text-xs bg-white border-border shrink-0 hidden md:flex">
+                <SelectTrigger className="w-full h-7 text-xs bg-white border-border shrink-0 hidden md:flex">
                     <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                    <SelectItem value="high">🔴 Haute</SelectItem>
-                    <SelectItem value="medium">🟡 Normale</SelectItem>
-                    <SelectItem value="low">🟢 Basse</SelectItem>
+                    <SelectItem value="high">
+                        <span className="text-danger font-semibold">Haute</span>
+                    </SelectItem>
+                    <SelectItem value="medium">
+                        <span className="text-brand font-semibold">Normale</span>
+                    </SelectItem>
+                    <SelectItem value="low">
+                        <span className="text-text-muted">Basse</span>
+                    </SelectItem>
                 </SelectContent>
             </Select>
 
-            {/* Due date */}
-            <span className={`shrink-0 text-xs font-medium w-[60px] text-right hidden lg:block ${overdue ? 'text-danger font-bold' : 'text-text-muted'}`}>
-                {task.due_date ? format(parseISO(task.due_date), 'd MMM', { locale: fr }) : ''}
+            {/* Col 5 — due date */}
+            <span className={`text-xs font-medium text-right hidden lg:block ${overdue ? 'text-danger font-bold' : 'text-text-muted'}`}>
+                {task.due_date ? format(parseISO(task.due_date), 'd MMM', { locale: fr }) : '—'}
             </span>
 
-            {/* Edit icon */}
-            <button
-                type="button"
-                onClick={() => onEdit(task)}
-                className="shrink-0 text-text-muted hover:text-brand transition-colors opacity-0 group-hover:opacity-100"
-                aria-label="Modifier"
-            >
-                <Pencil className="h-3.5 w-3.5" />
-            </button>
+            {/* Col 6 — inclus_devis checkbox */}
+            <div className="flex justify-center" title="Inclure dans le devis">
+                <input
+                    type="checkbox"
+                    checked={inDevis}
+                    onChange={e => onUpdate(task.id, { inclus_devis: e.target.checked })}
+                    className="h-4 w-4 accent-brand rounded cursor-pointer"
+                />
+            </div>
 
-            {/* Delete icon */}
-            <button
-                type="button"
-                onClick={() => onDelete(task.id)}
-                className="shrink-0 text-text-muted hover:text-danger transition-colors opacity-0 group-hover:opacity-100"
-                aria-label="Supprimer"
-            >
-                <Trash2 className="h-3.5 w-3.5" />
-            </button>
+            {/* Col 7 — edit + delete */}
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                    type="button"
+                    onClick={() => onEdit(task)}
+                    className="text-text-muted hover:text-brand transition-colors p-0.5"
+                    aria-label="Modifier"
+                >
+                    <Pencil className="h-3 w-3" />
+                </button>
+                <button
+                    type="button"
+                    onClick={() => onDelete(task.id)}
+                    className="text-text-muted hover:text-danger transition-colors p-0.5"
+                    aria-label="Supprimer"
+                >
+                    <Trash2 className="h-3 w-3" />
+                </button>
+            </div>
         </div>
     );
 }

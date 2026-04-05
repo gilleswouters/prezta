@@ -3,9 +3,11 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/compone
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useTasks } from '@/hooks/useTasks';
+import { useProducts } from '@/hooks/useProducts';
 import type { Task, TaskPriority, TaskStatus } from '@/types/task';
-import { Loader2 } from 'lucide-react';
+import { ChevronsUpDown, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface TaskDetailModalProps {
@@ -17,6 +19,7 @@ interface TaskDetailModalProps {
 
 export function TaskDetailModal({ open, onOpenChange, task, projectId }: TaskDetailModalProps) {
     const { updateTask } = useTasks(projectId);
+    const { data: products } = useProducts();
 
     const [title, setTitle] = useState('');
     const [notes, setNotes] = useState('');
@@ -28,6 +31,10 @@ export function TaskDetailModal({ open, onOpenChange, task, projectId }: TaskDet
     const [inclusDevis, setInclusDevis] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    // Catalogue picker state
+    const [catalogueOpen, setCatalogueOpen] = useState(false);
+    const [catalogueSearch, setCatalogueSearch] = useState('');
+
     useEffect(() => {
         if (task && open) {
             setTitle(task.title);
@@ -38,8 +45,23 @@ export function TaskDetailModal({ open, onOpenChange, task, projectId }: TaskDet
             setFacturable(task.facturable ?? false);
             setPrixEstime(task.prix_estime?.toString() ?? '');
             setInclusDevis(task.inclus_devis ?? false);
+            setCatalogueSearch('');
         }
     }, [task, open]);
+
+    const filteredProducts = products?.filter(p =>
+        p.name.toLowerCase().includes(catalogueSearch.toLowerCase())
+    ) ?? [];
+
+    const handleSelectProduct = (productId: string) => {
+        const product = products?.find(p => p.id === productId);
+        if (!product) return;
+        setTitle(product.name);
+        setPrixEstime(product.unit_price.toString());
+        setFacturable(true);
+        setCatalogueOpen(false);
+        setCatalogueSearch('');
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -81,6 +103,63 @@ export function TaskDetailModal({ open, onOpenChange, task, projectId }: TaskDet
                 </DialogDescription>
 
                 <form onSubmit={handleSubmit} className="mt-4 space-y-4">
+                    {/* Catalogue picker */}
+                    <div className="space-y-1.5">
+                        <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+                            Prestation depuis le catalogue (optionnel)
+                        </label>
+                        <Popover open={catalogueOpen} onOpenChange={setCatalogueOpen}>
+                            <PopoverTrigger asChild>
+                                <button
+                                    type="button"
+                                    className="w-full flex items-center justify-between h-9 px-3 py-2 bg-surface border border-border rounded-md text-sm text-left hover:bg-surface-hover transition-colors"
+                                >
+                                    <span className="text-text-muted">Choisir depuis le catalogue…</span>
+                                    <ChevronsUpDown className="h-4 w-4 text-text-muted shrink-0" />
+                                </button>
+                            </PopoverTrigger>
+                            <PopoverContent className="p-0 bg-white border-border shadow-lg w-[420px]" align="start">
+                                <div className="p-2 border-b border-border">
+                                    <Input
+                                        placeholder="Rechercher une prestation…"
+                                        value={catalogueSearch}
+                                        onChange={e => setCatalogueSearch(e.target.value)}
+                                        className="h-8 bg-surface border-border text-sm"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div className="max-h-52 overflow-y-auto">
+                                    {filteredProducts.length === 0 ? (
+                                        <p className="px-3 py-4 text-xs text-text-muted text-center">
+                                            {products?.length === 0
+                                                ? 'Aucune prestation dans votre catalogue.'
+                                                : 'Aucun résultat.'}
+                                        </p>
+                                    ) : (
+                                        filteredProducts.map(p => (
+                                            <button
+                                                key={p.id}
+                                                type="button"
+                                                onClick={() => handleSelectProduct(p.id)}
+                                                className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-surface text-left transition-colors"
+                                            >
+                                                <span className="flex flex-col">
+                                                    <span className="text-text-primary font-medium">{p.name}</span>
+                                                    <span className="text-text-muted text-xs">
+                                                        {p.unit_price.toFixed(2)} € / {p.unit}
+                                                    </span>
+                                                </span>
+                                                {title === p.name && (
+                                                    <Check className="h-3.5 w-3.5 text-brand shrink-0" />
+                                                )}
+                                            </button>
+                                        ))
+                                    )}
+                                </div>
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+
                     <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-text-secondary uppercase tracking-wider">Nom *</label>
                         <Input
@@ -127,9 +206,15 @@ export function TaskDetailModal({ open, onOpenChange, task, projectId }: TaskDet
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="high">🔴 Haute</SelectItem>
-                                    <SelectItem value="medium">🟡 Normale</SelectItem>
-                                    <SelectItem value="low">🟢 Basse</SelectItem>
+                                    <SelectItem value="high">
+                                        <span className="text-danger font-semibold">Haute</span>
+                                    </SelectItem>
+                                    <SelectItem value="medium">
+                                        <span className="text-brand font-semibold">Normale</span>
+                                    </SelectItem>
+                                    <SelectItem value="low">
+                                        <span className="text-text-muted">Basse</span>
+                                    </SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

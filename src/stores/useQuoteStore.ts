@@ -32,7 +32,7 @@ const createEmptyLine = (): QuoteLine => ({
     description: '',
     quantity: 1,
     unitPrice: 0,
-    tvaRate: 21,
+    tvaRate: 20,
     unit: 'heure',
 });
 
@@ -116,7 +116,8 @@ export const useQuoteStore = create<QuoteState>((set, get) => ({
             subtotalHT += lineTotalHT;
 
             const rateKey = line.tvaRate.toString();
-            const lineTVA = lineTotalHT * (line.tvaRate / 100);
+            // tvaRate <= 0 means 0% (auto-entrepreneur) or exonéré → TVA = 0
+            const lineTVA = line.tvaRate > 0 ? lineTotalHT * (line.tvaRate / 100) : 0;
 
             if (!tvaAmounts[rateKey]) tvaAmounts[rateKey] = 0;
             tvaAmounts[rateKey] += lineTVA;
