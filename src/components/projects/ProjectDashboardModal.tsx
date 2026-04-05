@@ -919,7 +919,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                         <p className="text-sm text-text-muted">Retrouvez l'historique légal et financier lié à ce projet.</p>
                                     </div>
                                     <div className="flex gap-2">
-                                        <Button variant="outline" size="sm" onClick={() => openQuoteBuilder()} className="text-orange-600 border-orange-200 hover:bg-orange-50">
+                                        <Button variant="outline" size="sm" onClick={() => setActiveTab('quotes')} className="text-orange-600 border-orange-200 hover:bg-orange-50">
                                             <Plus className="h-4 w-4 mr-1" /> Devis / Facture
                                         </Button>
                                         <Button variant="outline" size="sm" onClick={onOpenContracts} className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
@@ -997,7 +997,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                                 className="h-8 hover:bg-surface border border-transparent hover:border-border"
                                                                 onClick={() => {
                                                                     if (doc.type === 'contract') onOpenContracts();
-                                                                    else openQuoteBuilder(doc.id);
+                                                                    else setActiveTab('quotes');
                                                                 }}
                                                             >
                                                                 Gérer <LayoutDashboard className="h-3 w-3 ml-2 opacity-50" />
