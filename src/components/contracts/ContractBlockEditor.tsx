@@ -204,7 +204,7 @@ export function ContractBlockEditor({
                                     disabled={disabled}
                                 />
                             ) : (
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-text-muted select-none">
+                                <span className="text-[11px] font-bold uppercase tracking-wider text-text-muted select-none">
                                     Préambule
                                 </span>
                             )}
@@ -352,7 +352,7 @@ export function ContractBlockEditor({
                     {/* Preview */}
                     {aiPreview && (
                         <div className="rounded-lg border border-border bg-white p-4 space-y-2">
-                            <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted">
                                 Aperçu de la clause générée
                             </p>
                             <p className="font-semibold text-sm text-brand">
@@ -369,7 +369,7 @@ export function ContractBlockEditor({
                                     onClick={insertAiClause}
                                 >
                                     <Check className="h-3.5 w-3.5 mr-1.5" />
-                                    Insérer dans le contrat
+                                    Insérer dans le document
                                 </Button>
                                 <Button
                                     type="button"

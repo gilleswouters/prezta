@@ -10,7 +10,9 @@
 export type DocumentType =
     | 'Devis'
     | 'Facture'
+    | 'Avoir'
     | 'Contrat-prestation'
+    | 'Document-prestation'
     | 'NDA'
     | 'CGV'
     | 'Contrat-mission';

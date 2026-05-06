@@ -30,7 +30,7 @@ Il a été convenu ce qui suit :
 
 ## Article 1 – Objet
 
-Décrivez ici l'objet du contrat.
+Décrivez ici l'objet du document.
 
 ## Article 2 – Durée
 
@@ -59,7 +59,7 @@ export function ContractTemplateModal({
     const [name, setName] = useState('');
     const [description, setDescription] = useState('');
     const [jurisdiction, setJurisdiction] = useState<Jurisdiction>('FR');
-    const [category, setCategory] = useState('Contrat de prestation');
+    const [category, setCategory] = useState('Document de prestation');
     const [content, setContent] = useState('');
 
     // Key incremented each time we want to remount the block editor
@@ -71,7 +71,7 @@ export function ContractTemplateModal({
             setName(template?.name ?? '');
             setDescription(template?.description ?? '');
             setJurisdiction(template?.jurisdiction ?? 'FR');
-            setCategory(template?.category ?? 'Contrat de prestation');
+            setCategory(template?.category ?? 'Document de prestation');
             setContent(template?.content ?? DEFAULT_CONTENT);
             setEditorKey((k) => k + 1);
         }
@@ -95,8 +95,8 @@ export function ContractTemplateModal({
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[960px] h-[92vh] flex flex-col bg-white border-border">
                 <DialogHeader className="shrink-0">
-                    <DialogTitle className="font-serif text-2xl flex items-center gap-2">
-                        <FileText className="h-6 w-6 text-brand" />
+                    <DialogTitle className="text-[length:var(--text-18)] font-[var(--font-heavy)] flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-[var(--color-text-3)]" />
                         {isSystem
                             ? 'Voir le modèle'
                             : template
@@ -118,7 +118,7 @@ export function ContractTemplateModal({
                             <Input
                                 value={name}
                                 onChange={(e) => setName(e.target.value)}
-                                placeholder="Ex: Contrat de dev web"
+                                placeholder="Ex: Document de prestation web"
                                 disabled={isSystem}
                             />
                         </div>
@@ -161,7 +161,7 @@ export function ContractTemplateModal({
                     <div className="space-y-2">
                         <div className="flex items-center justify-between">
                             <label className="text-sm font-semibold text-text">
-                                Contenu du contrat *
+                                Contenu du document *
                             </label>
                             <Popover>
                                 <PopoverTrigger asChild>
@@ -192,8 +192,8 @@ export function ContractTemplateModal({
                                         <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px] mb-1">{`{{date_debut}}`}</code>
                                         <code className="block bg-surface px-1.5 py-0.5 rounded text-[11px]">{`{{montant_total}}`}</code>
                                     </div>
-                                    <p className="text-[10px] text-text-muted mt-4">
-                                        Les variables sont remplacées automatiquement lors de la génération d'un contrat pour un projet.
+                                    <p className="text-[11px] text-text-muted mt-4">
+                                        Les variables sont remplacées automatiquement lors de la génération d'un document pour un projet.
                                     </p>
                                 </PopoverContent>
                             </Popover>

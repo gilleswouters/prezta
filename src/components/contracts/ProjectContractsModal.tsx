@@ -13,12 +13,11 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
 import { ContractGenerator } from './ContractGenerator';
-import { ContractWizardNew } from './ContractWizardNew';
 import { SendForSignatureModal } from './SendForSignatureModal';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
 import { format, differenceInDays, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { PDFDownloadLink, pdf } from '@react-pdf/renderer';
+import { PDFDownloadLink, BlobProvider, pdf } from '@react-pdf/renderer';
 import { ContractPDFDocument } from './pdf/ContractPDFDocument';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -27,7 +26,7 @@ import { generateDocumentName } from '@/lib/document-naming';
 import { trackEvent } from '@/lib/plausible';
 import {
     Download, Loader2, Plus, FileText, Calendar, Send, Trash2, AlertCircle,
-    ChevronDown, GitBranch, CalendarClock, X,
+    ChevronDown, GitBranch, CalendarClock, X, Eye,
 } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar as CalendarPicker } from '@/components/ui/calendar';
@@ -50,7 +49,6 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
     const deleteContract = useDeleteProjectContract();
 
     const [generatorOpen, setGeneratorOpen] = useState(false);
-    const [wizardNewOpen, setWizardNewOpen] = useState(false);
     const [contractToDelete, setContractToDelete] = useState<string | null>(null);
     const [signerErrorId, setSignerErrorId] = useState<string | null>(null);
 
@@ -68,6 +66,9 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
 
     // Expiry date picker state
     const [expiryPickerId, setExpiryPickerId] = useState<string | null>(null);
+
+    // PDF preview state
+    const [previewContract, setPreviewContract] = useState<ProjectContract | null>(null);
 
     useEffect(() => {
         if (!open) {
@@ -224,19 +225,19 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-[600px] bg-white border-border">
+                <DialogContent className="sm:max-w-[760px] w-full bg-white border-border">
                     <DialogHeader>
-                        <DialogTitle className="font-serif text-2xl flex items-center gap-2">
-                            <FileText className="h-6 w-6 text-brand" />
-                            Contrats du Projet
+                        <DialogTitle className="text-[length:var(--text-18)] font-[var(--font-heavy)] flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-[var(--color-text-3)]" />
+                            Documents du Projet
                         </DialogTitle>
                         <DialogDescription>
-                            Gérez les documents contractuels pour{' '}
+                            Gérez les documents pour{' '}
                             <strong>{project?.name}</strong>.
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="py-4 space-y-4">
+                    <div className="py-4 space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                         {isLoading ? (
                             <div className="flex justify-center py-8">
                                 <Loader2 className="h-8 w-8 animate-spin text-brand" />
@@ -245,25 +246,15 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                             <div className="text-center py-12 border-2 border-dashed border-border rounded-xl">
                                 <FileText className="h-12 w-12 mx-auto mb-2 text-text-muted opacity-20" />
                                 <p className="text-text-muted mb-4">
-                                    Aucun contrat généré pour ce projet.
+                                    Aucun document généré pour ce projet.
                                 </p>
-                                <div className="flex gap-2 justify-center">
-                                    <Button
-                                        onClick={handleAddContract}
-                                        variant="outline"
-                                        className="border-border"
-                                    >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Depuis un modèle
-                                    </Button>
-                                    <Button
-                                        onClick={() => setWizardNewOpen(true)}
-                                        className="bg-brand text-white hover:bg-brand-hover"
-                                    >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Assistant guidé
-                                    </Button>
-                                </div>
+                                <Button
+                                    onClick={handleAddContract}
+                                    className="bg-brand text-white hover:bg-brand-hover"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Nouveau document
+                                </Button>
                             </div>
                         ) : (
                             <div className="space-y-3">
@@ -273,7 +264,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                     const isHistoryOpen = historyOpenIds.has(contract.id);
                                     const clientName = project?.clients?.name ?? 'Client';
                                     const pdfFileName = generateDocumentName(
-                                        'Contrat-prestation',
+                                        'Document-prestation',
                                         clientName,
                                         contract.created_at,
                                         contract.version ?? 1,
@@ -284,8 +275,8 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                             key={contract.id}
                                             className="rounded-xl border border-border bg-surface hover:border-brand/30 transition-all"
                                         >
-                                            <div className="flex items-center justify-between p-4">
-                                                <div className="flex items-center gap-3 min-w-0">
+                                            <div className="flex items-center justify-between p-4 gap-3">
+                                                <div className="flex items-center gap-3 min-w-0 flex-1">
                                                     <div className={`p-2 rounded-lg shrink-0 ${
                                                         contract.status === 'signed'
                                                             ? 'bg-success-light text-success'
@@ -297,7 +288,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                                     }`}>
                                                         <FileText className="h-5 w-5" />
                                                     </div>
-                                                    <div className="min-w-0">
+                                                    <div className="min-w-0 flex-1">
                                                         <div className="flex items-center gap-1.5">
                                                             <p className="font-bold text-sm text-text truncate">
                                                                 {contract.title}
@@ -310,7 +301,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                                         </div>
                                                         <div className="flex items-center gap-2 mt-1 flex-wrap">
                                                             <Calendar className="h-3 w-3 text-text-muted shrink-0" />
-                                                            <span className="text-[10px] text-text-muted">
+                                                            <span className="text-[11px] text-text-muted">
                                                                 {format(new Date(contract.created_at), 'dd/MM/yyyy', { locale: fr })}
                                                             </span>
                                                             <DocumentStatusBadge status={contract.status} />
@@ -321,7 +312,17 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                                     </div>
                                                 </div>
 
-                                                <div className="flex items-center gap-1 shrink-0 ml-2">
+                                                <div className="flex items-center gap-1 shrink-0">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="icon"
+                                                        className="h-8 w-8 text-text-muted hover:text-brand hover:bg-brand-light"
+                                                        title="Prévisualiser le document"
+                                                        onClick={() => setPreviewContract(contract)}
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+
                                                     <PDFDownloadLink
                                                         document={
                                                             <ContractPDFDocument contract={contract} profile={profile ?? null} />
@@ -344,7 +345,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                                             size="sm"
                                                             variant="ghost"
                                                             className="h-8 text-[11px] text-brand hover:bg-brand-light"
-                                                            onClick={() => handleRequestSend(contract)}
+                                                            onClick={() => setPreviewContract(contract)}
                                                         >
                                                             <Send className="h-3 w-3 mr-1" />
                                                             Envoyer
@@ -383,7 +384,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                                             <div className="p-3 border-b border-border">
                                                                 <p className="text-xs font-semibold text-text-primary">Date d&apos;expiration (optionnel)</p>
                                                                 {contract.expires_at && (
-                                                                    <p className="text-[10px] text-text-muted mt-0.5">
+                                                                    <p className="text-[11px] text-text-muted mt-0.5">
                                                                         Actuellement : {format(parseISO(contract.expires_at), 'dd/MM/yyyy', { locale: fr })}
                                                                     </p>
                                                                 )}
@@ -445,7 +446,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                             {/* Version history collapsible */}
                                             {hasHistory && isHistoryOpen && (
                                                 <div className="border-t border-border px-4 pb-3 pt-2">
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-text-muted mb-2 flex items-center gap-1.5">
+                                                    <p className="text-[11px] font-bold uppercase tracking-wider text-text-muted mb-2 flex items-center gap-1.5">
                                                         <GitBranch className="h-3 w-3" />
                                                         Historique des versions
                                                     </p>
@@ -454,11 +455,11 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                                             .sort((a, b) => (a.version ?? 1) - (b.version ?? 1))
                                                             .map(sibling => (
                                                                 <div key={sibling.id} className="flex items-center gap-2 text-xs text-text-muted">
-                                                                    <span className="font-mono font-bold text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border">
+                                                                    <span className="font-mono font-bold text-[11px] px-1.5 py-0.5 rounded bg-surface border border-border">
                                                                         v{sibling.version ?? 1}
                                                                     </span>
                                                                     <DocumentStatusBadge status={sibling.status} />
-                                                                    <span className="text-[10px]">
+                                                                    <span className="text-[11px]">
                                                                         {format(new Date(sibling.created_at), 'dd/MM/yyyy', { locale: fr })}
                                                                     </span>
                                                                 </div>
@@ -470,24 +471,14 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                                     );
                                 })}
 
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={handleAddContract}
-                                        variant="outline"
-                                        className="flex-1 border-dashed border-2 py-6 border-border hover:border-brand/50 text-text-muted hover:text-brand"
-                                    >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Depuis un modèle
-                                    </Button>
-                                    <Button
-                                        onClick={() => setWizardNewOpen(true)}
-                                        variant="outline"
-                                        className="flex-1 border-dashed border-2 py-6 border-brand/40 hover:border-brand text-brand hover:bg-brand/5"
-                                    >
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        Assistant guidé
-                                    </Button>
-                                </div>
+                                <Button
+                                    onClick={handleAddContract}
+                                    variant="outline"
+                                    className="w-full border-dashed border-2 py-6 border-border hover:border-brand/50 text-text-muted hover:text-brand"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Nouveau document
+                                </Button>
                             </div>
                         )}
                     </div>
@@ -505,7 +496,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                     signerName={project?.clients?.contact_name ?? ''}
                     signerEmail={project?.clients?.email ?? ''}
                     documentTitle={contractToSend.title}
-                    documentType="Contrat"
+                    documentType="Document"
                     onConfirm={() => handleSendToFirma(contractToSend)}
                 />
             )}
@@ -516,9 +507,9 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                     <AlertDialogHeader>
                         <AlertDialogTitle>Créer une nouvelle version ?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Un contrat a déjà été envoyé pour ce projet. Souhaitez-vous créer
-                            une <strong>nouvelle version (v{pendingVersion})</strong> liée au contrat
-                            existant, ou un <strong>contrat indépendant</strong> ?
+                            Un document a déjà été envoyé pour ce projet. Souhaitez-vous créer
+                            une <strong>nouvelle version (v{pendingVersion})</strong> liée au document
+                            existant, ou un <strong>document indépendant</strong> ?
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter className="flex-col sm:flex-row gap-2">
@@ -526,7 +517,7 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                             Annuler
                         </AlertDialogCancel>
                         <Button variant="outline" onClick={handleVersionInterceptIndependent}>
-                            Contrat indépendant
+                            Document indépendant
                         </Button>
                         <AlertDialogAction onClick={handleVersionInterceptConfirmNew} className="bg-brand text-white hover:bg-brand-hover">
                             Nouvelle version
@@ -543,14 +534,77 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
                 version={pendingVersionOf ? pendingVersion : undefined}
             />
 
-            {project?.id && (
-                <ContractWizardNew
-                    open={wizardNewOpen}
-                    onOpenChange={setWizardNewOpen}
-                    projectId={project.id}
-                />
-            )}
+            {/* PDF Preview dialog */}
+            <Dialog open={!!previewContract} onOpenChange={(v) => !v && setPreviewContract(null)}>
+                <DialogContent className="sm:max-w-[860px] w-full h-[90vh] bg-white border-border flex flex-col p-0 overflow-hidden">
+                    <DialogHeader className="px-5 pt-5 pb-3 border-b border-border shrink-0">
+                        <DialogTitle className="text-[length:var(--text-16)] font-[var(--font-heavy)] flex items-center gap-2">
+                            <Eye className="h-4 w-4 text-text-muted" />
+                            {previewContract?.title ?? 'Aperçu du document'}
+                        </DialogTitle>
+                        <DialogDescription className="text-[11px] text-text-muted">
+                            Vérifiez le contenu avant envoi. Le PDF ci-dessous correspond exactement au document envoyé au client.
+                        </DialogDescription>
+                    </DialogHeader>
 
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                        {previewContract && (
+                            <BlobProvider document={
+                                <ContractPDFDocument
+                                    contract={previewContract}
+                                    profile={profile ?? null}
+                                    clientName={project?.clients?.name}
+                                />
+                            }>
+                                {({ url, loading, error }) => {
+                                    if (loading) return (
+                                        <div className="flex items-center justify-center h-full gap-2 text-text-muted text-sm">
+                                            <Loader2 className="h-5 w-5 animate-spin" />
+                                            Génération du PDF…
+                                        </div>
+                                    );
+                                    if (error || !url) return (
+                                        <div className="flex items-center justify-center h-full gap-2 text-danger text-sm">
+                                            <AlertCircle className="h-5 w-5" />
+                                            Impossible de générer l'aperçu.
+                                        </div>
+                                    );
+                                    return (
+                                        <iframe
+                                            src={url}
+                                            style={{ width: '100%', height: '100%', border: 'none' }}
+                                            title="Aperçu du contrat"
+                                        />
+                                    );
+                                }}
+                            </BlobProvider>
+                        )}
+                    </div>
+
+                    <div className="flex items-center justify-end gap-2 px-5 py-3 border-t border-border shrink-0">
+                        <Button
+                            variant="outline"
+                            className="border-border"
+                            onClick={() => setPreviewContract(null)}
+                        >
+                            Fermer
+                        </Button>
+                        {previewContract?.status === 'draft' && (
+                            <Button
+                                className="bg-brand text-white hover:bg-brand-hover"
+                                onClick={() => {
+                                    const c = previewContract;
+                                    setPreviewContract(null);
+                                    handleRequestSend(c);
+                                }}
+                            >
+                                <Send className="h-3.5 w-3.5 mr-1.5" />
+                                Envoyer pour signature
+                            </Button>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
 
             <AlertDialog
                 open={!!contractToDelete}
@@ -558,10 +612,10 @@ export function ProjectContractsModal({ open, onOpenChange, project }: ProjectCo
             >
                 <AlertDialogContent className="bg-white border-border">
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Supprimer le contrat ?</AlertDialogTitle>
+                        <AlertDialogTitle>Supprimer le document ?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            Cette action est définitive. Le contrat sera supprimé de votre tableau
-                            de bord. (Attention : si le contrat a déjà été envoyé via Firma, il ne
+                            Cette action est définitive. Le document sera supprimé de votre tableau
+                            de bord. (Attention : si le document a déjà été envoyé via Firma, il ne
                             sera pas annulé côté client).
                         </AlertDialogDescription>
                     </AlertDialogHeader>
@@ -589,14 +643,14 @@ function ExpiryBadge({ expiresAt }: { expiresAt: string }) {
 
     if (!isWarning) {
         return (
-            <span className="text-[10px] text-text-muted bg-surface border border-border px-1.5 py-0.5 rounded font-medium">
+            <span className="text-[11px] text-text-muted bg-surface border border-border px-1.5 py-0.5 rounded font-medium">
                 Expire le {format(parseISO(expiresAt), 'dd/MM/yyyy', { locale: fr })}
             </span>
         );
     }
 
     return (
-        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+        <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${
             isUrgent
                 ? 'bg-red-100 text-red-700 border border-red-200'
                 : 'bg-amber-100 text-amber-700 border border-amber-200'

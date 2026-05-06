@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useDashboard } from '@/hooks/useDashboard';
 import { useProjects } from '@/hooks/useProjects';
 import { useAuth } from '@/hooks/useAuth';
 import { useProfile } from '@/hooks/useProfile';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { ProjectDashboardModal } from '@/components/projects/ProjectDashboardModal';
 import { ProjectEditModal } from '@/components/projects/ProjectEditModal';
 import { ProjectContractsModal } from '@/components/contracts/ProjectContractsModal';
@@ -11,15 +12,17 @@ import type { ProjectWithClient } from '@/types/project';
 import {
     AlertCircle,
     FolderKanban,
-    FileSignature,
     AlertTriangle,
-    Clock,
     ArrowRight,
-    CheckCircle2,
     X,
     UserCircle,
+    Euro,
+    TrendingUp,
 } from 'lucide-react';
 import { KanbanBoard } from '@/components/planning/KanbanBoard';
+import { BanniereDemarrage } from '@/components/onboarding/BanniereDemarrage';
+import { OnboardingChecklist } from '@/components/onboarding/OnboardingChecklist';
+import { PageHeader } from '@/components/layout/PageHeader';
 import { useNavigate } from 'react-router-dom';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
@@ -46,6 +49,8 @@ export default function DashboardPage() {
     };
 
     // First name: full_name first word → email prefix → fallback
+    useEffect(() => { document.title = 'Tableau de bord · Prezta'; }, []);
+
     const firstName =
         profile?.full_name?.trim().split(' ')[0] ||
         user?.email?.split('@')[0] ||
@@ -58,24 +63,15 @@ export default function DashboardPage() {
         !profileBannerDismissed &&
         (onboardingIncomplete || !profile?.full_name || !profile?.legal_status);
 
-    if (isLoading || !data) {
-        return (
-            <div className="space-y-8 animate-pulse">
-                <div className="h-8 w-48 bg-gray-200 rounded"></div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    {[1, 2, 3, 4].map(i => (
-                        <div key={i} className="h-32 bg-gray-100 rounded-xl"></div>
-                    ))}
-                </div>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="h-80 bg-gray-100 rounded-xl"></div>
-                    <div className="h-80 bg-gray-100 rounded-xl"></div>
-                </div>
-            </div>
-        );
-    }
-
-    const { kpi, overdueInvoices, unsignedContracts, urgentTasks, overdueTasks, recentProjects, staleSignedDocs, viewedQuotes, expiringContracts } = data;
+    const kpi                = data?.kpi;
+    const overdueInvoices    = data?.overdueInvoices    ?? [];
+    const unsignedContracts  = data?.unsignedContracts  ?? [];
+    const urgentTasks        = data?.urgentTasks        ?? [];
+    const overdueTasks       = data?.overdueTasks       ?? [];
+    const recentProjects     = data?.recentProjects     ?? [];
+    const staleSignedDocs    = data?.staleSignedDocs    ?? [];
+    const viewedQuotes       = data?.viewedQuotes       ?? [];
+    const expiringContracts  = data?.expiringContracts  ?? [];
 
     // Build the "Actions Requises" list from hook data
     type ActionItem = {
@@ -111,7 +107,7 @@ export default function DashboardPage() {
             .filter(c => !staleSignedDocs.find(s => s.id === c.id))
             .map(c => ({
                 id: c.id,
-                title: `Contrat en attente : ${c.projectName || c.title}`,
+                title: `Document en attente : ${c.projectName || c.title}`,
                 desc: `Envoyé le ${format(parseISO(c.created_at), 'dd MMM', { locale: fr })}`,
                 badge: 'À signer',
                 variant: 'warning' as const,
@@ -137,7 +133,7 @@ export default function DashboardPage() {
             })),
         ...expiringContracts.filter(c => c.daysUntilExpiry <= 7).map(c => ({
             id: `expiry-urgent-${c.id}`,
-            title: `⚠ Contrat expire dans ${c.daysUntilExpiry}j : ${c.title}`,
+            title: `⚠ Document expire dans ${c.daysUntilExpiry}j : ${c.title}`,
             desc: `Projet : ${c.projectName || 'Sans projet'} — Renouvelez ou archivez`,
             badge: 'Urgent',
             variant: 'danger' as const,
@@ -145,7 +141,7 @@ export default function DashboardPage() {
         })),
         ...expiringContracts.filter(c => c.daysUntilExpiry > 7).map(c => ({
             id: `expiry-${c.id}`,
-            title: `Contrat expire bientôt : ${c.title}`,
+            title: `Document expire bientôt : ${c.title}`,
             desc: `Expire dans ${c.daysUntilExpiry} jours — ${c.projectName || 'Sans projet'}`,
             badge: 'J-30',
             variant: 'warning' as const,
@@ -162,16 +158,17 @@ export default function DashboardPage() {
     ].slice(0, 5);
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
-            {/* Header */}
-            <div>
-                <h1 className="text-3xl font-extrabold tracking-tight text-[var(--text-primary)]">
-                    Bonjour, <span className="capitalize">{firstName}</span> 👋
-                </h1>
-                <p className="text-[var(--text-muted)] text-sm mt-1">
-                    Voici votre résumé d'activité pour {format(new Date(), 'MMMM yyyy', { locale: fr })}.
-                </p>
-            </div>
+        <div>
+            <PageHeader
+                title="Tableau de bord"
+                color="violet"
+                subtitle={`Bonjour ${firstName} — ${format(new Date(), 'MMMM yyyy', { locale: fr })}`}
+            />
+
+            <div className="space-y-8">
+
+            {/* Onboarding checklist — disparaît quand tout est coché ou ignoré */}
+            <OnboardingChecklist />
 
             {/* Profile completion nudge */}
             {showProfileNudge && (
@@ -196,128 +193,133 @@ export default function DashboardPage() {
                 </div>
             )}
 
-            {/* KPI Grid — 4 operational cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            {/* Onboarding — guide le flux catalogue → devis → facture */}
+            <BanniereDemarrage />
+
+            {/* MetricCards × 4 */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {isLoading ? (
+                    [1, 2, 3, 4].map(i => (
+                        <div key={i} className="metric-card metric-neutral space-y-3">
+                            <Skeleton className="h-3 w-24" />
+                            <Skeleton className="h-7 w-20" />
+                            <Skeleton className="h-3 w-32" />
+                        </div>
+                    ))
+                ) : (<>
                 <StatCard
-                    label="PROJETS ACTIFS"
-                    value={kpi.activeProjectsCount}
-                    sub={<span className="text-[var(--text-muted)]">En cours de réalisation</span>}
-                    icon={<FolderKanban className="h-5 w-5 text-blue-500" />}
-                    gradient="from-blue-500/10 to-transparent"
-                />
-                <StatCard
-                    label="DOCS À SIGNER"
-                    value={kpi.docsASignerCount}
-                    sub={<span className="text-[var(--text-muted)]">Attente signature client</span>}
-                    icon={<FileSignature className="h-5 w-5 text-amber-500" />}
-                    gradient="from-amber-500/10 to-transparent"
-                />
-                <StatCard
-                    label="TÂCHES EN RETARD"
-                    value={overdueTasks.length}
-                    sub={<span className="text-[var(--text-muted)]">À traiter en priorité</span>}
-                    icon={<Clock className="h-5 w-5 text-red-500" />}
-                    valueColor={overdueTasks.length > 0 ? 'text-red-600' : undefined}
-                    gradient="from-red-500/10 to-transparent"
+                    label="À ENCAISSER"
+                    value={`${(kpi?.pendingAmount ?? 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`}
+                    sub="Factures en attente de paiement"
+                    icon={<Euro className="h-4 w-4 text-[var(--color-amber-accent)]" />}
+                    metricColor="amber"
                 />
                 <StatCard
                     label="FACTURES EN RETARD"
-                    value={kpi.overdueInvoicesCount}
-                    sub={<span className="text-[var(--text-muted)]">Non réglées à échéance</span>}
-                    icon={<AlertTriangle className="h-5 w-5 text-orange-500" />}
-                    valueColor={kpi.overdueInvoicesCount > 0 ? 'text-orange-600' : undefined}
-                    gradient="from-orange-500/10 to-transparent"
+                    value={kpi?.overdueInvoicesCount ?? 0}
+                    sub={(kpi?.overdueInvoicesCount ?? 0) === 0 ? 'Aucune facture en retard' : 'Non réglées à échéance'}
+                    icon={<AlertTriangle className="h-4 w-4" style={{ color: (kpi?.overdueInvoicesCount ?? 0) > 0 ? 'var(--color-danger-text)' : 'var(--color-success-text)' }} />}
+                    metricColor={(kpi?.overdueInvoicesCount ?? 0) > 0 ? 'danger' : 'success'}
+                    valueColor={(kpi?.overdueInvoicesCount ?? 0) > 0 ? 'text-[var(--color-danger-text)]' : undefined}
                 />
+                <StatCard
+                    label="PROJETS ACTIFS"
+                    value={kpi?.activeProjectsCount ?? 0}
+                    sub="Missions en cours de réalisation"
+                    icon={<FolderKanban className="h-4 w-4 text-[var(--color-text-3)]" />}
+                    metricColor="neutral"
+                />
+                <StatCard
+                    label="RECOUVREMENT"
+                    value={`${kpi?.recoveryRate ?? 100} %`}
+                    sub="Factures payées vs émises"
+                    icon={<TrendingUp className="h-4 w-4 text-[var(--color-teal-accent)]" />}
+                    metricColor="teal"
+                />
+                </>)}
             </div>
 
+            {/* Actions Requises — visible only when there are items */}
+            {!isLoading && requiredActions.length > 0 && (
+                <div className="bg-white border border-[var(--color-border-1)] rounded-xl overflow-hidden" style={{ borderLeft: '3px solid var(--color-danger-text)' }}>
+                    <div className="px-5 py-3 border-b border-[var(--color-border-1)] flex items-center gap-2">
+                        <AlertCircle className="h-3.5 w-3.5 text-[var(--color-danger-text)] shrink-0" />
+                        <span className="section-label" style={{ marginBottom: 0 }}>
+                            {requiredActions.length} action{requiredActions.length > 1 ? 's' : ''} requise{requiredActions.length > 1 ? 's' : ''}
+                        </span>
+                    </div>
+                    <div className="divide-y divide-[var(--color-border-1)]">
+                        {requiredActions.map((action) => (
+                            <div
+                                key={action.id}
+                                onClick={action.onClick}
+                                className="px-5 py-3 flex items-center justify-between hover:bg-[var(--color-bg-2)] transition-colors cursor-pointer group"
+                            >
+                                <div className="pr-4 min-w-0">
+                                    <p className="text-xs font-semibold text-[var(--color-text-1)] leading-tight truncate">{action.title}</p>
+                                    <p className="text-[11px] text-[var(--color-text-3)] mt-0.5 truncate">{action.desc}</p>
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant={action.variant === 'danger' ? 'destructive' : 'outline'}
+                                    className="text-[11px] h-7 px-2 shrink-0"
+                                >
+                                    {action.badge}
+                                </Button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
             {/* Kanban Planning */}
-            <div className="bg-white border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
-                <div className="px-6 py-4 border-b border-[var(--border)]">
-                    <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-2">
-                        <FolderKanban className="h-4 w-4 text-violet-500" />
-                        Planning
-                    </h2>
-                    <p className="text-xs text-[var(--text-muted)] mt-0.5">Vue Kanban de toutes vos tâches.</p>
+            <div className="bg-white border border-[var(--color-border-1)] rounded-xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-[var(--color-border-1)] flex items-center gap-2">
+                    <FolderKanban className="h-3.5 w-3.5 text-[var(--color-text-3)] shrink-0" />
+                    <span className="section-label" style={{ marginBottom: 0 }}>Planning</span>
                 </div>
                 <div className="p-4">
                     <KanbanBoard />
                 </div>
             </div>
 
-            {/* Actions + Recent Projects */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Actions Requises */}
-                <div className="bg-white border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm relative">
-                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-red-500 to-orange-400"></div>
-                    <div className="px-6 py-5 border-b border-[var(--border)]">
-                        <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-primary)] flex items-center gap-2">
-                            <AlertCircle className="h-4 w-4 text-red-500" />
-                            Actions Requises
-                        </h2>
-                    </div>
-                    <div className="divide-y divide-[var(--border)] bg-gray-50/30">
-                        {requiredActions.length > 0 ? (
-                            requiredActions.map((action) => (
-                                <div
-                                    key={action.id}
-                                    onClick={action.onClick}
-                                    className="px-6 py-4 flex items-center justify-between hover:bg-[var(--surface-hover)] transition-colors cursor-pointer group"
-                                >
-                                    <div className="pr-4">
-                                        <p className="text-sm font-semibold text-[var(--text-primary)] leading-tight group-hover:text-[var(--brand)] transition-colors">{action.title}</p>
-                                        <p className="text-xs text-[var(--text-muted)] mt-1">{action.desc}</p>
-                                    </div>
-                                    <Button
-                                        size="sm"
-                                        variant={action.variant === 'danger' ? 'destructive' : 'outline'}
-                                        className="text-[10px] h-7 px-2 shrink-0"
-                                    >
-                                        {action.badge}
-                                    </Button>
-                                </div>
-                            ))
-                        ) : (
-                            <div className="p-8 text-center text-[var(--text-muted)] text-sm">
-                                <div className="h-10 w-10 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                                    <CheckCircle2 className="h-5 w-5" />
-                                </div>
-                                Tout est à jour !
-                            </div>
-                        )}
-                    </div>
+            {/* Recent Projects */}
+            <div className="bg-white border border-[var(--color-border-1)] rounded-xl overflow-hidden">
+                <div className="px-5 py-4 border-b border-[var(--color-border-1)] flex items-center justify-between">
+                    <span className="section-label" style={{ marginBottom: 0 }}>Projets récents</span>
+                    <Button variant="ghost" size="sm" className="text-xs h-7 text-[var(--color-text-2)] hover:text-[var(--color-text-1)]" onClick={() => navigate('/projets')}>
+                        Voir tout <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
                 </div>
-
-                {/* Recent Projects */}
-                <div className="bg-white border border-[var(--border)] rounded-2xl overflow-hidden shadow-sm">
-                    <div className="px-6 py-4 border-b border-[var(--border)] flex items-center justify-between">
-                        <h2 className="text-sm font-bold uppercase tracking-wider text-[var(--text-muted)]">
-                            Projets récents
-                        </h2>
-                        <Button variant="ghost" size="sm" className="text-xs h-7 text-[var(--brand)] hover:text-[var(--brand-hover)]" onClick={() => navigate('/projets')}>
-                            Voir tout <ArrowRight className="h-3 w-3 ml-1" />
-                        </Button>
-                    </div>
-                    <div className="divide-y divide-[var(--border)]">
-                        {recentProjects.length > 0 ? (
-                            recentProjects.map((project) => (
-                                <div
-                                    key={project.id}
-                                    className="px-6 py-3 bg-white hover:bg-[var(--surface)] transition-colors cursor-pointer group"
-                                    onClick={() => openProjectModal(project.id)}
-                                >
-                                    <div className="flex items-center justify-between">
-                                        <p className="text-sm font-medium text-[var(--text-primary)] group-hover:text-[var(--brand)] transition-colors truncate pr-2">{project.name}</p>
-                                        <StatusBadge status={project.status} />
-                                    </div>
-                                    <p className="text-xs text-[var(--text-muted)] mt-0.5">{project.clientName || 'Sans client'}</p>
+                <div className="divide-y divide-[var(--color-border-1)]">
+                    {isLoading ? (
+                        <div className="p-4 space-y-3">
+                            {[1, 2, 3].map(i => (
+                                <div key={i} className="px-2 py-1 space-y-1.5">
+                                    <Skeleton className="h-4 w-2/3" />
+                                    <Skeleton className="h-3 w-1/3" />
                                 </div>
-                            ))
-                        ) : (
-                            <div className="p-6 text-center text-[var(--text-muted)] text-sm">
-                                Aucun projet récent.
+                            ))}
+                        </div>
+                    ) : recentProjects.length > 0 ? (
+                        recentProjects.map((project) => (
+                            <div
+                                key={project.id}
+                                className="px-5 py-3 bg-white hover:bg-[var(--color-bg-2)] transition-colors cursor-pointer group"
+                                onClick={() => openProjectModal(project.id)}
+                            >
+                                <div className="flex items-center justify-between">
+                                    <p className="text-xs font-semibold text-[var(--color-text-1)] group-hover:text-[var(--color-text-1)] truncate pr-2">{project.name}</p>
+                                    <StatusBadge status={project.status} />
+                                </div>
+                                <p className="text-[11px] text-[var(--color-text-3)] mt-0.5">{project.clientName || 'Sans client'}</p>
                             </div>
-                        )}
-                    </div>
+                        ))
+                    ) : (
+                        <div className="px-5 py-6 text-center text-[var(--color-text-3)] text-xs">
+                            Aucun projet récent.
+                        </div>
+                    )}
                 </div>
             </div>
 
@@ -345,6 +347,7 @@ export default function DashboardPage() {
                 onOpenChange={setContractsModalOpen}
                 project={selectedProject}
             />
+            </div>{/* end space-y-8 */}
         </div>
     );
 }
@@ -353,38 +356,35 @@ export default function DashboardPage() {
 
 function StatCard({
     label, value, sub, icon,
-    valueColor = 'text-[var(--text-primary)]',
-    gradient,
+    valueColor = 'text-[var(--color-text-1)]',
+    metricColor,
 }: {
     label: string;
     value: string | number;
-    sub: React.ReactNode;
+    sub: string;
     icon: React.ReactNode;
     valueColor?: string;
-    gradient?: string;
+    metricColor?: 'amber' | 'blue' | 'teal' | 'rose' | 'neutral' | 'danger' | 'success';
 }) {
     return (
-        <div className="bg-white border border-[var(--border)] rounded-2xl p-5 shadow-sm relative overflow-hidden group hover:shadow-md transition-all duration-300">
-            {gradient && (
-                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-50 pointer-events-none transition-opacity group-hover:opacity-100`}></div>
-            )}
-            <div className="relative z-10 text-[11px] font-bold text-[var(--text-muted)] uppercase tracking-widest mb-3">{label}</div>
-            <div className="relative z-10 flex items-center justify-between mb-2">
-                <div className={`text-3xl font-extrabold tracking-tight ${valueColor}`}>{value}</div>
-                <div className="h-12 w-12 bg-white/50 backdrop-blur-sm shadow-sm rounded-xl border border-white/20 flex items-center justify-center transform group-hover:scale-110 transition-transform duration-300">
+        <div className={`metric-card ${metricColor ? `metric-${metricColor}` : 'metric-neutral'}`}>
+            <div className="flex items-start justify-between mb-3">
+                <span className="section-label" style={{ marginBottom: 0 }}>{label}</span>
+                <div className="h-7 w-7 bg-[var(--color-bg-2)] rounded-[var(--radius-sm)] flex items-center justify-center shrink-0">
                     {icon}
                 </div>
             </div>
-            <div className="relative z-10 text-[11px] font-medium leading-none">{sub}</div>
+            <div className={`font-[var(--font-heavy)] tracking-tight leading-none mb-1.5 ${valueColor}`} style={{ fontSize: 'var(--text-22)' }}>{value}</div>
+            <div className="text-[var(--color-text-3)]" style={{ fontSize: 'var(--text-11)' }}>{sub}</div>
         </div>
     );
 }
 
 function StatusBadge({ status }: { status: string }) {
     const variants: Record<string, string> = {
-        in_progress: 'bg-blue-50 text-blue-600 border-blue-100',
+        in_progress: 'bg-[var(--color-bg-2)] text-[var(--color-text-2)] border-[var(--color-border-1)]',
         completed: 'bg-emerald-50 text-emerald-600 border-emerald-100',
-        draft: 'bg-amber-50 text-amber-600 border-amber-100',
+        draft: 'bg-gray-100 text-gray-500 border-gray-200',
         cancelled: 'bg-red-50 text-red-600 border-red-100',
         archived: 'bg-gray-100 text-gray-500 border-gray-200',
     };
@@ -396,7 +396,7 @@ function StatusBadge({ status }: { status: string }) {
         archived: 'Archivé',
     };
     return (
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${variants[status] || variants.draft}`}>
+        <span className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border ${variants[status] || variants.draft}`}>
             {labels[status] || status}
         </span>
     );

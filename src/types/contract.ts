@@ -114,6 +114,7 @@ export interface ContractTemplate {
     jurisdiction: Jurisdiction;
     category: string;
     is_system: boolean;
+    is_example: boolean;
     created_at: string;
     updated_at: string;
 }
@@ -160,7 +161,7 @@ export interface ContractCatalogueItem {
 
 export type ContractTemplateFormData = Omit<
     ContractTemplate,
-    'id' | 'user_id' | 'created_at' | 'updated_at' | 'is_system'
+    'id' | 'user_id' | 'created_at' | 'updated_at' | 'is_system' | 'is_example'
 >;
 
 export type ProjectContractFormData = Omit<

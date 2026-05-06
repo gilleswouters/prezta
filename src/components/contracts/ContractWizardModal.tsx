@@ -1,68 +1,67 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useProfile } from '@/hooks/useProfile';
-import { supabase } from '@/lib/supabase';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { useState, useEffect } from 'react';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DialogDescription,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, ArrowLeft, ArrowRight, Check, Sparkles, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
-import type { ContractTemplateFormData, Jurisdiction } from '@/types/contract';
-import { ContractPreviewPanel } from './ContractPreviewPanel';
+import { Loader2, FileText, BookOpen } from 'lucide-react';
+import type { ContractTemplateFormData } from '@/types/contract';
+import { ContractBlockEditor } from './ContractBlockEditor';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const DEFAULT_CONTENT = `Entre les soussignés :
 
-interface WizardClause {
-    id: string;
-    title: string;
-    body: string;
-    isGenerating: boolean;
-    aiPrompt: string;
-}
+**Le Prestataire**
+{{nom_prestataire}}
+{{adresse_prestataire}}
+SIRET : {{siret_prestataire}} — TVA : {{tva_prestataire}}
 
-type WizardStep = 1 | 2 | 3 | 4 | 5;
+**Le Client**
+{{nom_client}}
+{{adresse_client}}
 
-const CONTRACT_TYPES = [
-    'Contrat de prestation',
-    'Contrat de mission',
-    'NDA',
-    'CGV',
-] as const;
+Il a été convenu ce qui suit :
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+## Article 1 – Objet
 
-function makeId(): string {
-    return crypto.randomUUID();
-}
+Décrivez ici l'objet du document.
 
-function buildContent(parties: string, mission: string, clauses: WizardClause[]): string {
-    const lines: string[] = [];
+## Article 2 – Conditions
 
-    if (parties.trim()) {
-        lines.push(parties.trim());
-        lines.push('');
-    }
+Ajoutez vos conditions ici.
+`;
 
-    if (mission.trim()) {
-        lines.push('## Article 1 – Objet de la mission');
-        lines.push('');
-        lines.push(mission.trim());
-        lines.push('');
-    }
-
-    clauses.forEach((clause, i) => {
-        if (clause.title.trim() || clause.body.trim()) {
-            lines.push(`## Article ${i + 2} – ${clause.title || 'Sans titre'}`);
-            lines.push('');
-            lines.push(clause.body.trim() || '(Contenu à compléter)');
-            lines.push('');
-        }
-    });
-
-    return lines.join('\n').trim();
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
+const VARIABLES = [
+    {
+        group: 'Mon profil',
+        items: [
+            { key: '{{nom_prestataire}}', label: 'Nom / société' },
+            { key: '{{adresse_prestataire}}', label: 'Adresse complète' },
+            { key: '{{ville_prestataire}}', label: 'Ville' },
+            { key: '{{siret_prestataire}}', label: 'SIRET / BCE' },
+            { key: '{{tva_prestataire}}', label: 'N° TVA' },
+        ],
+    },
+    {
+        group: 'Le Client',
+        items: [
+            { key: '{{nom_client}}', label: 'Nom du client' },
+            { key: '{{adresse_client}}', label: 'Adresse' },
+        ],
+    },
+    {
+        group: 'Le Projet',
+        items: [
+            { key: '{{nom_projet}}', label: 'Nom du projet' },
+            { key: '{{date_debut}}', label: 'Date de début' },
+            { key: '{{montant_total}}', label: 'Montant HT' },
+        ],
+    },
+];
 
 interface ContractWizardModalProps {
     open: boolean;
@@ -71,365 +70,148 @@ interface ContractWizardModalProps {
     isLoading: boolean;
 }
 
-export function ContractWizardModal({ open, onOpenChange, onSave, isLoading }: ContractWizardModalProps) {
-    const { data: profile } = useProfile();
+export function ContractWizardModal({
+    open,
+    onOpenChange,
+    onSave,
+    isLoading,
+}: ContractWizardModalProps) {
+    const [name, setName] = useState('');
+    const [category, setCategory] = useState('');
+    const [description, setDescription] = useState('');
+    const [content, setContent] = useState(DEFAULT_CONTENT);
+    const [editorKey, setEditorKey] = useState(0);
 
-    const [step, setStep] = useState<WizardStep>(1);
-    const [contractType, setContractType] = useState<string>('Contrat de prestation');
-    const [templateName, setTemplateName] = useState('');
-    const [partiesText, setPartiesText] = useState('');
-    const [missionObject, setMissionObject] = useState('');
-    const [clauses, setClauses] = useState<WizardClause[]>([
-        { id: makeId(), title: 'Délai de paiement', body: '', isGenerating: false, aiPrompt: '' },
-        { id: makeId(), title: 'Propriété intellectuelle', body: '', isGenerating: false, aiPrompt: '' },
-    ]);
-    const [showPreview, setShowPreview] = useState(true);
-
-    // Reset state when opening
-    const handleOpenChange = useCallback((isOpen: boolean) => {
-        if (!isOpen) {
-            setStep(1);
-            setContractType('Contrat de prestation');
-            setTemplateName('');
-            setPartiesText('');
-            setMissionObject('');
-            setClauses([
-                { id: makeId(), title: 'Délai de paiement', body: '', isGenerating: false, aiPrompt: '' },
-                { id: makeId(), title: 'Propriété intellectuelle', body: '', isGenerating: false, aiPrompt: '' },
-            ]);
-        }
-        onOpenChange(isOpen);
-    }, [onOpenChange]);
-
-    // Auto-fill parties from profile when entering step 2
-    const handleGoToStep2 = () => {
-        if (!partiesText && profile) {
-            const prestataire = [
-                `**Le Prestataire**`,
-                profile.full_name || '{{nom_prestataire}}',
-                profile.address_street ? `${profile.address_street}, ${profile.address_zip} ${profile.address_city}` : '{{adresse_prestataire}}',
-                profile.siret_number ? `SIRET : ${profile.siret_number}` : '',
-                profile.vat_number ? `TVA : ${profile.vat_number}` : '',
-            ].filter(Boolean).join('\n');
-
-            const defaultParties = `Entre les soussignés :\n\n${prestataire}\n\n**Le Client**\n{{nom_client}}\n{{adresse_client}}\n\nIl a été convenu ce qui suit :`;
-            setPartiesText(defaultParties);
-        }
-        setStep(2);
-    };
-
-    // AI clause generation
-    const generateClause = async (clauseId: string) => {
-        const clause = clauses.find(c => c.id === clauseId);
-        if (!clause || !clause.aiPrompt.trim()) return;
-
-        setClauses(prev => prev.map(c => c.id === clauseId ? { ...c, isGenerating: true } : c));
-
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            const accessToken = session?.access_token ?? import.meta.env.VITE_SUPABASE_ANON_KEY ?? '';
-
-            const { data, error } = await supabase.functions.invoke('generate-clause', {
-                headers: { Authorization: `Bearer ${accessToken}` },
-                body: { description: `${clause.title} — ${clause.aiPrompt}` },
-            });
-
-            if (error) throw error;
-
-            const result = data as { clause?: { title: string; body: string }; error?: string } | null;
-            if (result?.clause?.body) {
-                setClauses(prev => prev.map(c =>
-                    c.id === clauseId ? { ...c, body: result.clause!.body, isGenerating: false, aiPrompt: '' } : c
-                ));
-            }
-        } catch {
-            setClauses(prev => prev.map(c => c.id === clauseId ? { ...c, isGenerating: false } : c));
-        }
-    };
-
-    const addClause = () => {
-        setClauses(prev => [...prev, { id: makeId(), title: '', body: '', isGenerating: false, aiPrompt: '' }]);
-    };
-
-    const removeClause = (id: string) => {
-        setClauses(prev => prev.filter(c => c.id !== id));
-    };
-
-    const updateClause = (id: string, field: keyof Pick<WizardClause, 'title' | 'body' | 'aiPrompt'>, value: string) => {
-        setClauses(prev => prev.map(c => c.id === id ? { ...c, [field]: value } : c));
-    };
-
-    const handleFinalSave = async () => {
-        const content = buildContent(partiesText, missionObject, clauses);
-        await onSave({
-            name: templateName.trim() || contractType,
-            description: `${contractType} — créé avec le guide pas à pas`,
-            jurisdiction: 'FR' as Jurisdiction,
-            category: contractType,
-            content,
-        });
-        handleOpenChange(false);
-    };
-
-    const previewContent = buildContent(partiesText, missionObject, clauses);
-
-    // Debounced content for live PDF preview (500ms)
-    const [debouncedContent, setDebouncedContent] = useState(previewContent);
     useEffect(() => {
-        const id = setTimeout(() => setDebouncedContent(previewContent), 500);
-        return () => clearTimeout(id);
-    }, [previewContent]);
+        if (open) {
+            setName('');
+            setCategory('');
+            setDescription('');
+            setContent(DEFAULT_CONTENT);
+            setEditorKey((k) => k + 1);
+        }
+    }, [open]);
 
-    // ─── Step indicators ──────────────────────────────────────────────────────
-
-    const STEPS = [
-        { n: 1, label: 'Type' },
-        { n: 2, label: 'Parties' },
-        { n: 3, label: 'Objet' },
-        { n: 4, label: 'Clauses' },
-        { n: 5, label: 'Finaliser' },
-    ];
+    const handleSave = async () => {
+        if (!name.trim() || !content.trim()) return;
+        await onSave({
+            name: name.trim(),
+            description: description.trim() || null,
+            jurisdiction: 'FR',
+            category: category.trim() || 'Modèle personnel',
+            content: content.trim(),
+        });
+        onOpenChange(false);
+    };
 
     return (
-        <Dialog open={open} onOpenChange={handleOpenChange}>
-            <DialogContent className={`bg-white border-border ${showPreview ? 'sm:max-w-[1100px]' : 'sm:max-w-[640px]'} max-h-[92vh] flex flex-col transition-all duration-300`}>
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="sm:max-w-[960px] h-[92vh] flex flex-col bg-white border-border">
                 <DialogHeader className="shrink-0">
-                    <div className="flex items-center justify-between">
-                        <DialogTitle className="font-serif text-xl">Guide pas à pas — Nouveau modèle</DialogTitle>
-                        {step >= 2 && (
-                            <button
-                                type="button"
-                                onClick={() => setShowPreview(v => !v)}
-                                className="flex items-center gap-1.5 text-xs text-brand hover:underline shrink-0"
-                            >
-                                {showPreview ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                                {showPreview ? 'Masquer l\'aperçu' : 'Voir l\'aperçu PDF'}
-                            </button>
-                        )}
-                    </div>
-                    <DialogDescription className="text-text-muted text-sm">
-                        Étape {step} sur 5
+                    <DialogTitle className="text-[length:var(--text-18)] font-[var(--font-heavy)] flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-[var(--color-text-3)]" />
+                        Nouveau modèle
+                    </DialogTitle>
+                    <DialogDescription>
+                        Donnez un nom à votre modèle et rédigez son contenu. Utilisez les variables pour l'auto-complétion.
                     </DialogDescription>
-
-                    {/* Step indicators */}
-                    <div className="flex items-center gap-1 mt-3">
-                        {STEPS.map((s, i) => (
-                            <div key={s.n} className="flex items-center gap-1">
-                                <div className={`flex items-center justify-center h-6 w-6 rounded-full text-[11px] font-bold transition-colors ${step > s.n ? 'bg-brand text-white' : step === s.n ? 'bg-brand text-white ring-2 ring-brand/30' : 'bg-surface2 text-text-muted'}`}>
-                                    {step > s.n ? <Check className="h-3 w-3" /> : s.n}
-                                </div>
-                                <span className={`text-[11px] font-medium hidden sm:block ${step === s.n ? 'text-brand' : 'text-text-muted'}`}>{s.label}</span>
-                                {i < STEPS.length - 1 && <div className={`h-px w-4 sm:w-8 ${step > s.n ? 'bg-brand' : 'bg-border'}`} />}
-                            </div>
-                        ))}
-                    </div>
                 </DialogHeader>
 
-                <div className={`flex-1 overflow-hidden flex gap-6 min-h-0`}>
-                    {/* Main content */}
-                    <div className="flex-1 overflow-y-auto space-y-5 py-4 pr-1">
-
-                        {/* ─── Step 1: Type + Nom ───────────────────────────────── */}
-                        {step === 1 && (
-                            <div className="space-y-4">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-text">Type de contrat *</label>
-                                    <Select value={contractType} onValueChange={setContractType}>
-                                        <SelectTrigger className="bg-surface2 border-border">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent className="bg-white">
-                                            {CONTRACT_TYPES.map(t => (
-                                                <SelectItem key={t} value={t}>{t}</SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-text">Nom du modèle *</label>
-                                    <Input
-                                        placeholder={`Ex: ${contractType} — Dev web`}
-                                        value={templateName}
-                                        onChange={(e) => setTemplateName(e.target.value)}
-                                        className="bg-surface2 border-border"
-                                        autoFocus
-                                    />
-                                    <p className="text-xs text-text-muted">Ce nom identifie le modèle dans votre bibliothèque.</p>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* ─── Step 2: Parties ──────────────────────────────────── */}
-                        {step === 2 && (
-                            <div className="space-y-3">
-                                <p className="text-sm text-text-muted">Informations pré-remplies depuis votre profil. Modifiez si nécessaire.</p>
-                                <Textarea
-                                    value={partiesText}
-                                    onChange={(e) => setPartiesText(e.target.value)}
-                                    className="bg-surface2 border-border font-mono text-xs resize-none min-h-[240px]"
-                                    placeholder="Entre les soussignés :&#10;&#10;**Le Prestataire**&#10;{{nom_prestataire}}&#10;..."
+                <div className="flex-1 min-h-0 flex gap-5 overflow-hidden">
+                    {/* Main column: metadata + editor */}
+                    <div className="flex-1 min-w-0 flex flex-col gap-4 overflow-y-auto pr-1 form-scrollbar">
+                        {/* Metadata row */}
+                        <div className="grid grid-cols-2 gap-3 shrink-0">
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-semibold text-text">Nom du modèle *</label>
+                                <Input
+                                    autoFocus
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                    placeholder="Ex : Devis standard, Bon de commande…"
                                 />
-                                <p className="text-xs text-text-muted">
-                                    Utilisez les variables : <code className="bg-surface px-1 rounded">{'{{nom_prestataire}}'}</code>, <code className="bg-surface px-1 rounded">{'{{nom_client}}'}</code>, <code className="bg-surface px-1 rounded">{'{{adresse_client}}'}</code>
-                                </p>
                             </div>
-                        )}
-
-                        {/* ─── Step 3: Objet ────────────────────────────────────── */}
-                        {step === 3 && (
-                            <div className="space-y-3">
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold text-text">Objet de la mission</label>
-                                    <Textarea
-                                        value={missionObject}
-                                        onChange={(e) => setMissionObject(e.target.value)}
-                                        placeholder="Décrivez en quelques mots l'objet de cette mission...&#10;&#10;Ex: Le prestataire s'engage à fournir des services de développement web conformément au cahier des charges annexé."
-                                        className="bg-surface2 border-border resize-none min-h-[180px]"
-                                        autoFocus
-                                    />
-                                </div>
-                                <p className="text-xs text-text-muted">
-                                    Vous pouvez utiliser <code className="bg-surface px-1 rounded">{'{{nom_projet}}'}</code> et <code className="bg-surface px-1 rounded">{'{{date_debut}}'}</code>.
-                                </p>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-semibold text-text">Type de document</label>
+                                <Input
+                                    value={category}
+                                    onChange={(e) => setCategory(e.target.value)}
+                                    placeholder="Ex : Document de prestation, CGV, NDA…"
+                                />
                             </div>
-                        )}
-
-                        {/* ─── Step 4: Clauses ──────────────────────────────────── */}
-                        {step === 4 && (
-                            <div className="space-y-4">
-                                <p className="text-sm text-text-muted">Ajoutez vos clauses essentielles. Utilisez l'IA pour les générer.</p>
-
-                                <div className="space-y-3">
-                                    {clauses.map((clause, idx) => (
-                                        <div key={clause.id} className="rounded-lg border border-border bg-white overflow-hidden">
-                                            <div className="flex items-center gap-2 px-4 py-2 bg-surface/60 border-b border-border">
-                                                <span className="text-xs font-bold text-text-muted uppercase tracking-wider w-6 shrink-0">#{idx + 1}</span>
-                                                <Input
-                                                    value={clause.title}
-                                                    onChange={(e) => updateClause(clause.id, 'title', e.target.value)}
-                                                    placeholder="Nom de la clause..."
-                                                    className="h-7 text-sm font-semibold border-none shadow-none bg-transparent px-0 focus-visible:ring-0"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    onClick={() => removeClause(clause.id)}
-                                                    className="h-6 w-6 flex items-center justify-center text-text-muted hover:text-danger hover:bg-danger-light rounded transition-colors shrink-0"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            </div>
-                                            <Textarea
-                                                value={clause.body}
-                                                onChange={(e) => updateClause(clause.id, 'body', e.target.value)}
-                                                placeholder="Rédigez le contenu de cette clause, ou utilisez l'aide IA ci-dessous..."
-                                                className="border-none shadow-none resize-none text-sm font-mono bg-white focus-visible:ring-0 min-h-[80px] rounded-none"
-                                            />
-                                            {/* AI assist */}
-                                            <div className="px-4 pb-3 border-t border-border/50 bg-surface/30 pt-2 space-y-2">
-                                                <div className="flex items-center gap-2">
-                                                    <Input
-                                                        value={clause.aiPrompt}
-                                                        onChange={(e) => updateClause(clause.id, 'aiPrompt', e.target.value)}
-                                                        placeholder="Décrivez ce que doit couvrir cette clause..."
-                                                        className="h-7 text-xs bg-white border-border flex-1"
-                                                        onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), generateClause(clause.id))}
-                                                    />
-                                                    <Button
-                                                        type="button"
-                                                        size="sm"
-                                                        className="h-7 text-xs bg-brand text-white hover:bg-brand-hover shrink-0 gap-1"
-                                                        onClick={() => generateClause(clause.id)}
-                                                        disabled={!clause.aiPrompt.trim() || clause.isGenerating}
-                                                    >
-                                                        {clause.isGenerating ? (
-                                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                                        ) : (
-                                                            <Sparkles className="h-3 w-3" />
-                                                        )}
-                                                        Aide IA ✦
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="w-full border-dashed text-text-muted hover:text-text-primary hover:border-solid"
-                                    onClick={addClause}
-                                >
-                                    <Plus className="h-3.5 w-3.5 mr-1.5" />
-                                    Ajouter une clause
-                                </Button>
-                            </div>
-                        )}
-
-                        {/* ─── Step 5: Preview final ────────────────────────────── */}
-                        {step === 5 && (
-                            <div className="space-y-4">
-                                <div className="bg-surface rounded-lg border border-border p-4">
-                                    <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">Aperçu du modèle</p>
-                                    <pre className="text-xs text-text-secondary whitespace-pre-wrap font-mono leading-relaxed max-h-[400px] overflow-y-auto">
-                                        {previewContent || '(Modèle vide)'}
-                                    </pre>
-                                </div>
-                                <div className="bg-brand-light/20 border border-brand/20 rounded-lg p-4 space-y-1">
-                                    <p className="text-sm font-semibold text-brand">Prêt à créer :</p>
-                                    <p className="text-sm text-text-secondary">
-                                        <strong>{templateName || contractType}</strong> · {contractType} · {clauses.filter(c => c.title || c.body).length} clause(s)
-                                    </p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Live PDF preview panel (all steps from 2 onward) */}
-                    {step >= 2 && showPreview && (
-                        <div className="w-[420px] shrink-0 border-l border-border pl-4 py-4 hidden lg:flex flex-col">
-                            <p className="text-xs font-bold text-text-muted uppercase tracking-wider mb-3">Aperçu PDF temps réel</p>
-                            <div className="flex-1 rounded-lg overflow-hidden bg-surface">
-                                <ContractPreviewPanel
-                                    content={debouncedContent}
-                                    title={templateName || contractType}
-                                    profile={profile ?? null}
+                            <div className="col-span-2 space-y-1.5">
+                                <label className="text-sm font-semibold text-text">Description</label>
+                                <Input
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                    placeholder="Optionnel — à quoi sert ce modèle ?"
                                 />
                             </div>
                         </div>
-                    )}
+
+                        {/* Hint */}
+                        <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800 shrink-0">
+                            <BookOpen className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600" />
+                            <span>
+                                Collez ou rédigez votre modèle. Utilisez{' '}
+                                <code className="font-mono bg-amber-100 px-1 rounded">{'{{nom_client}}'}</code>,{' '}
+                                <code className="font-mono bg-amber-100 px-1 rounded">{'{{nom_projet}}'}</code>, etc.
+                                {' '}pour les données automatiques.
+                            </span>
+                        </div>
+
+                        {/* Block editor */}
+                        <ContractBlockEditor
+                            key={editorKey}
+                            value={content}
+                            onChange={setContent}
+                        />
+                    </div>
+
+                    {/* Variables sidebar */}
+                    <div className="w-52 shrink-0 overflow-y-auto form-scrollbar">
+                        <p className="text-[11px] font-bold text-text-muted uppercase tracking-wider mb-3">
+                            Variables disponibles
+                        </p>
+                        {VARIABLES.map((group) => (
+                            <div key={group.group} className="mb-4">
+                                <p className="text-[11px] font-bold text-text-secondary mb-1.5 border-b border-border pb-1">
+                                    {group.group}
+                                </p>
+                                <div className="space-y-1.5">
+                                    {group.items.map((v) => (
+                                        <div key={v.key}>
+                                            <code className="block bg-surface px-1.5 py-1 rounded text-[11px] text-brand font-mono leading-tight">
+                                                {v.key}
+                                            </code>
+                                            <span className="text-[10px] text-text-muted pl-0.5">
+                                                {v.label}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        ))}
+                        <p className="text-[10px] text-text-muted mt-2 leading-relaxed">
+                            Ces valeurs sont injectées automatiquement lors de la génération depuis un projet.
+                        </p>
+                    </div>
                 </div>
 
-                <DialogFooter className="pt-4 border-t border-border mt-auto shrink-0 flex justify-between">
-                    <Button
-                        variant="ghost"
-                        onClick={() => step === 1 ? handleOpenChange(false) : setStep((s) => (s - 1) as WizardStep)}
-                    >
-                        {step === 1 ? 'Annuler' : <><ArrowLeft className="h-4 w-4 mr-1" /> Précédent</>}
+                <DialogFooter className="pt-4 border-t border-border mt-auto shrink-0">
+                    <Button variant="ghost" onClick={() => onOpenChange(false)}>
+                        Annuler
                     </Button>
-
-                    {step < 5 ? (
-                        <Button
-                            className="bg-brand text-white hover:bg-brand-hover"
-                            onClick={() => {
-                                if (step === 1) handleGoToStep2();
-                                else setStep((s) => (s + 1) as WizardStep);
-                            }}
-                            disabled={step === 1 && !templateName.trim()}
-                        >
-                            Suivant <ArrowRight className="h-4 w-4 ml-1" />
-                        </Button>
-                    ) : (
-                        <Button
-                            className="bg-brand text-white hover:bg-brand-hover"
-                            onClick={handleFinalSave}
-                            disabled={isLoading}
-                        >
-                            {isLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
-                            Créer le modèle
-                        </Button>
-                    )}
+                    <Button
+                        onClick={handleSave}
+                        disabled={!name.trim() || !content.trim() || isLoading}
+                        className="bg-brand text-white hover:bg-brand-hover"
+                    >
+                        {isLoading
+                            ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            : <FileText className="mr-2 h-4 w-4" />}
+                        Créer le modèle
+                    </Button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

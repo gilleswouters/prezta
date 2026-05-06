@@ -123,7 +123,7 @@ export function NotificationBell() {
             >
                 <Bell className="h-4 w-4" />
                 {count > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[9px] font-black bg-red-500 text-white rounded-full flex items-center justify-center leading-none">
+                    <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 text-[11px] font-black bg-danger text-white rounded-full flex items-center justify-center leading-none">
                         {count}
                     </span>
                 )}
@@ -184,7 +184,7 @@ export function NotificationBell() {
                                                         {n.daysLeft <= 7 ? `⚠ J-${n.daysLeft}` : `J-${n.daysLeft}`}
                                                     </span>
                                                     <button
-                                                        className="text-[10px] text-text-muted hover:text-text-primary underline"
+                                                        className="text-[11px] text-text-muted hover:text-text-primary underline"
                                                         onClick={() => handleDismissOne(n.id)}
                                                     >
                                                         Lu
@@ -200,8 +200,8 @@ export function NotificationBell() {
                                             key={n.id}
                                             className="px-4 py-3 hover:bg-surface-hover cursor-pointer flex items-start gap-3"
                                         >
-                                            <div className="h-7 w-7 rounded-full bg-blue-50 flex items-center justify-center shrink-0 mt-0.5">
-                                                <TrendingDown className="h-3.5 w-3.5 text-blue-600" />
+                                            <div className="h-7 w-7 rounded-full bg-[var(--color-bg-2)] flex items-center justify-center shrink-0 mt-0.5">
+                                                <TrendingDown className="h-3.5 w-3.5 text-[var(--color-text-2)]" />
                                             </div>
                                             <div
                                                 className="flex-1 min-w-0"
@@ -216,7 +216,7 @@ export function NotificationBell() {
                                                 </p>
                                             </div>
                                             <button
-                                                className="text-[10px] text-text-muted hover:text-text-primary underline shrink-0 mt-1"
+                                                className="text-[11px] text-text-muted hover:text-text-primary underline shrink-0 mt-1"
                                                 onClick={() => handleDismissOne(n.id)}
                                             >
                                                 Lu
@@ -229,8 +229,8 @@ export function NotificationBell() {
 
                         {count > 0 && (
                             <div className="px-4 py-2 border-t border-border bg-surface/50">
-                                <p className="text-[10px] text-text-muted text-center">
-                                    Contrats expirants et alertes de saisonnalité
+                                <p className="text-[11px] text-text-muted text-center">
+                                    Documents expirants et alertes de saisonnalité
                                 </p>
                             </div>
                         )}

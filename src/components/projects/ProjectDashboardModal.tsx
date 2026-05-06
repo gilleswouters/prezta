@@ -1,23 +1,30 @@
 import React from 'react';
-import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useQuery } from '@tanstack/react-query';
+import { Dialog, DialogContent, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import type { ProjectWithClient } from '@/types/project';
 import { ProjectStatus } from '@/types/project';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { ProjectTaskList } from '@/components/tasks/ProjectTaskList';
-import { QuickTaskPopup } from '@/components/tasks/QuickTaskPopup';
+import { GanttChart } from '@/components/tasks/GanttChart';
+import { TaskCreateDialog } from '@/components/tasks/TaskCreateDialog';
 import { useTasks } from '@/hooks/useTasks';
 import { SendForSignatureModal } from '@/components/contracts/SendForSignatureModal';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
-import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock, Download, Archive, Send, AlertCircle, Loader2, Eye, Copy, CheckSquare } from 'lucide-react';
+import { startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, isSameMonth, isSameDay, parseISO as parseDateISO } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
+import { LayoutDashboard, FileText, FileSignature, Share2, Pencil, Calendar, FolderKanban, Briefcase, User, Link as LinkIcon, Receipt, Plus, Clock, Download, Archive, Send, AlertCircle, Loader2, Eye, Copy, CheckSquare, X, ChevronLeft, ChevronRight, Layers, FileDown } from 'lucide-react';
+import { GenerateDocumentSheet } from '@/components/contracts/GenerateDocumentSheet';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { useQuotesByProject, useDuplicateQuote, useUpdateQuoteStatus, useSaveQuote, type Quote } from '@/hooks/useQuotes';
 import { useProjectContracts } from '@/hooks/useContracts';
 import { useInvoices } from '@/hooks/useInvoices';
+import { useConvertirDevisEnFacture, useFacturesByProject } from '@/hooks/useFactures';
+import type { Facture } from '@/types/facture';
 import { useProfile } from '@/hooks/useProfile';
 import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/lib/supabase';
@@ -28,9 +35,11 @@ import { QuotePDFDocument } from '@/components/quotes/pdf/QuotePDFDocument';
 import { ContractPDFDocument } from '@/components/contracts/pdf/ContractPDFDocument';
 import { InvoicePDFDocument } from '@/components/invoices/pdf/InvoicePDFDocument';
 import { QuoteBuilderModal } from '@/components/quotes/QuoteBuilderModal';
+import { ImportTasksModal } from '@/components/quotes/ImportTasksModal';
 import type { QuoteData, QuoteLine, QuoteTotals } from '@/types/quote';
 import type { ProjectContract } from '@/types/contract';
 import type { Invoice } from '@/types/invoice';
+import { taskMateriauTotalHT, type TaskMateriau } from '@/types/task-materiau';
 
 interface ProjectDashboardModalProps {
     open: boolean;
@@ -43,9 +52,11 @@ interface ProjectDashboardModalProps {
 
 export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onOpenContracts, defaultTab = "overview" }: ProjectDashboardModalProps) {
     const [activeTab, setActiveTab] = React.useState<string>(defaultTab);
+    const [tasksView, setTasksView] = React.useState<'list' | 'gantt'>('list');
+    const [ganttScale, setGanttScale] = React.useState<'day' | 'week' | 'month'>('week');
 
     // Fetch all project documents
-    const { data: tasks } = useTasks(project?.id);
+    const { data: tasks, updateTask } = useTasks(project?.id);
     const { data: quotes, isLoading: quoteLoading } = useQuotesByProject(project?.id);
     const { data: contracts, isLoading: contractsLoading } = useProjectContracts(project?.id);
     const { data: invoices, isLoading: invoicesLoading } = useInvoices(project?.id);
@@ -53,8 +64,17 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     const updateQuoteStatus = useUpdateQuoteStatus();
     const duplicateQuote = useDuplicateQuote();
     const saveQuote = useSaveQuote();
+    const convertirDevis = useConvertirDevisEnFacture();
+    const { data: facturesDuProjet } = useFacturesByProject(project?.id);
     const queryClient = useQueryClient();
     const { user } = useAuth();
+    const navigate = useNavigate();
+
+    const [convertingQuoteId, setConvertingQuoteId] = React.useState<string | null>(null);
+    const [generateDocOpen, setGenerateDocOpen] = React.useState(false);
+
+    // Mini calendar state (for the overview card)
+    const [calCardMonth, setCalCardMonth] = React.useState<Date>(new Date());
 
     // Portal state
     const [isTogglingPortal, setIsTogglingPortal] = React.useState(false);
@@ -62,8 +82,22 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     // Quick task popup
     const [quickTaskOpen, setQuickTaskOpen] = React.useState(false);
 
+    // Import tâches → devis
+    const [importTasksOpen, setImportTasksOpen] = React.useState(false);
+
+    async function handleImportTasks(taskIds: string[]) {
+        const currentSelectedIds = new Set(selectedTasks.map(t => t.id));
+        const newSelectedIds = new Set(taskIds);
+        const toAdd    = taskIds.filter(id => !currentSelectedIds.has(id));
+        const toRemove = selectedTasks.filter(t => !newSelectedIds.has(t.id)).map(t => t.id);
+        await Promise.all([
+            ...toAdd.map(id => updateTask({ id, updates: { inclus_devis: true } })),
+            ...toRemove.map(id => updateTask({ id, updates: { inclus_devis: false } })),
+        ]);
+    }
+
     // Devis tab: live task selection state (qty + price overrides per task)
-    type TaskLineOverride = { qty: number; price: string };
+    type TaskLineOverride = { qty: number; price: string; unit?: string; tvaRate?: number };
     const [taskLineOverrides, setTaskLineOverrides] = React.useState<Record<string, TaskLineOverride>>({});
 
     const selectedTasks = React.useMemo(
@@ -71,10 +105,83 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
         [tasks]
     );
 
-    const getTaskLine = (task: { id: string; prix_estime?: number | null }): TaskLineOverride =>
-        taskLineOverrides[task.id] ?? { qty: 1, price: task.prix_estime?.toString() ?? '0' };
+    const facturableTasks = React.useMemo(
+        () => (tasks ?? []).filter(t => t.facturable && t.prix_estime != null && t.prix_estime > 0),
+        [tasks]
+    );
 
-    const handleGenerateQuote = async () => {
+    // Fetch task_materiaux for all selected tasks so the Devis tab always shows
+    // the real total (labor + materials), regardless of whether prix_total is set in DB.
+    const selectedTaskIds = React.useMemo(() => selectedTasks.map(t => t.id), [selectedTasks]);
+    const { data: selectedTasksMateriaux } = useQuery({
+        queryKey: ['task-materiaux-devis', selectedTaskIds],
+        queryFn: async () => {
+            if (selectedTaskIds.length === 0) return [];
+            const { data, error } = await supabase
+                .from('task_materiaux')
+                .select('task_id, quantite, prix_unitaire, marge')
+                .in('task_id', selectedTaskIds);
+            if (error) throw error;
+            return data as { task_id: string; quantite: number; prix_unitaire: number; marge: number }[];
+        },
+        enabled: selectedTaskIds.length > 0,
+        staleTime: 30_000,
+    });
+
+    // Toggle: show material/sous-traitant breakdown in the devis table + annexe in PDF
+    const [showTaskDetail, setShowTaskDetail] = React.useState(false);
+    // Toggle: whether the annexe page shows prices of materials/sous-traitants
+    const [showMaterialPrices, setShowMaterialPrices] = React.useState(true);
+
+    // Full details query — only triggered when the detail view is open
+    const { data: taskMateriauDetails } = useQuery({
+        queryKey: ['task-materiaux-detail', selectedTaskIds],
+        queryFn: async () => {
+            if (selectedTaskIds.length === 0) return [];
+            const { data, error } = await supabase
+                .from('task_materiaux')
+                .select('*')
+                .in('task_id', selectedTaskIds)
+                .order('created_at');
+            if (error) throw error;
+            return data as TaskMateriau[];
+        },
+        enabled: showTaskDetail && selectedTaskIds.length > 0,
+        staleTime: 30_000,
+    });
+
+    // Materials total per task id (computed from live task_materiaux, not cached prix_total)
+    const materiauTotalByTaskId = React.useMemo(() => {
+        const map: Record<string, number> = {};
+        for (const item of selectedTasksMateriaux ?? []) {
+            map[item.task_id] = (map[item.task_id] ?? 0) + taskMateriauTotalHT(item);
+        }
+        return map;
+    }, [selectedTasksMateriaux]);
+
+    const getTaskLine = (task: { id: string; prix_estime?: number | null; quantite_tache?: number | null }): TaskLineOverride => {
+        if (taskLineOverrides[task.id]) return taskLineOverrides[task.id];
+        // Compute: labor (prix_estime × quantite_tache) + materials total
+        const labor = (task.prix_estime ?? 0) * (task.quantite_tache ?? 1);
+        const mats = materiauTotalByTaskId[task.id] ?? 0;
+        const total = labor + mats;
+        return { qty: 1, price: total > 0 ? total.toString() : '0' };
+    };
+
+    const handleTaskCreatedWithDevisData = React.useCallback(
+        (taskId: string, unit: string, tvaRate: number, prixEstime: number) => {
+            setTaskLineOverrides(prev => ({
+                ...prev,
+                [taskId]: { qty: prev[taskId]?.qty ?? 1, price: prixEstime > 0 ? prixEstime.toString() : (prev[taskId]?.price ?? '0'), unit, tvaRate },
+            }));
+        },
+        []
+    );
+
+    // Devis generation preview state (build in-memory, save only on approval)
+    const [quoteGeneratePreview, setQuoteGeneratePreview] = React.useState<QuoteData | null>(null);
+
+    const handleGenerateQuote = () => {
         if (!project || !selectedTasks.length) return;
         const maxVer = quotes && quotes.length > 0
             ? Math.max(...quotes.map(q => q.version ?? 0))
@@ -83,25 +190,70 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
 
         const lines: QuoteLine[] = selectedTasks.map(t => {
             const lv = getTaskLine(t);
+            const mats = showTaskDetail
+                ? (taskMateriauDetails ?? []).filter(m => m.task_id === t.id)
+                : [];
+
+            // Build sub-lines: labor first, then materials/sous-traitants
+            const subLines: import('@/types/quote').QuoteSubLine[] = [];
+            if (showTaskDetail) {
+                const laborQty = t.quantite_tache ?? 1;
+                const laborUnit = lv.unit ?? 'forfait';
+                const laborPrice = t.prix_estime ?? 0;
+                const laborTotal = laborPrice * laborQty;
+                // Always include labor line so the total is traceable
+                subLines.push({
+                    designation: 'Main d\'œuvre',
+                    type: 'main_oeuvre',
+                    quantite: laborQty,
+                    unite: laborUnit,
+                    prix_unitaire: laborPrice,
+                    total_ht: laborTotal,
+                });
+                for (const m of mats) {
+                    subLines.push({
+                        designation: m.designation,
+                        type: m.type,
+                        quantite: m.quantite,
+                        unite: m.unite,
+                        prix_unitaire: m.prix_unitaire,
+                        total_ht: taskMateriauTotalHT(m),
+                        fournisseur_nom: m.fournisseur_nom,
+                    });
+                }
+            }
+
             return {
                 id: crypto.randomUUID(),
-                description: t.title,
+                name: t.title,
                 quantity: lv.qty,
                 unitPrice: parseFloat(lv.price) || 0,
-                tvaRate: 20,
-                unit: 'forfait',
+                tvaRate: lv.tvaRate ?? 20,
+                unit: (lv.unit ?? 'forfait') as import('@/types/product').Unit,
+                subLines: subLines.length > 0 ? subLines : undefined,
             };
         });
 
-        const payload: QuoteData = {
+        const hasAnnex = lines.some(l => l.subLines && l.subLines.length > 0);
+
+        setQuoteGeneratePreview({
             title: `Devis v${newVersion} — ${project.name}`,
             projectId: project.id,
+            clientName: project.clients?.name ?? undefined,
+            clientAddress: project.clients?.address ?? undefined,
+            clientEmail: project.clients?.email ?? undefined,
             lines,
             notes: '',
+            status: 'draft',
             version: newVersion,
-        };
+            detailOptions: hasAnnex ? { showMaterialPrices } : undefined,
+        });
+    };
 
-        await saveQuote.mutateAsync({ projectId: project.id, payload });
+    const handleConfirmSaveQuote = async () => {
+        if (!project || !quoteGeneratePreview) return;
+        await saveQuote.mutateAsync({ projectId: project.id, payload: quoteGeneratePreview });
+        setQuoteGeneratePreview(null);
     };
 
     // Devis tab: FIRMA send — tracks which quote is being sent
@@ -180,6 +332,21 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     }, [quotes, contracts, invoices]);
 
     // ── Devis tab helpers ─────────────────────────────────────────────────────
+
+    async function handleConvertirEnFacture(quoteId: string) {
+        setConvertingQuoteId(quoteId);
+        try {
+            const echeance = new Date();
+            echeance.setDate(echeance.getDate() + 30);
+            const factureId = await convertirDevis.mutateAsync({
+                devisId: quoteId,
+                dateEcheance: echeance.toISOString().slice(0, 10),
+            });
+            navigate(`/factures/${factureId}`);
+        } finally {
+            setConvertingQuoteId(null);
+        }
+    }
 
     function calcQuoteTotals(lines: QuoteLine[]): QuoteTotals {
         const tvaAmounts: Record<string, number> = {};
@@ -365,6 +532,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
     );
 
     return (
+        <>
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-[95vw] sm:max-w-[1200px] w-[1200px] h-[90vh] bg-surface flex flex-col p-0 overflow-hidden rounded-2xl sm:rounded-2xl border-border">
 
@@ -388,6 +556,15 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                         </div>
                     </div>
 
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-2 border-brand/30 text-brand hover:bg-brand-light hover:border-brand/60 shrink-0"
+                        onClick={() => setGenerateDocOpen(true)}
+                    >
+                        <FileDown className="h-4 w-4" />
+                        Générer un document
+                    </Button>
                 </div>
 
                 {/* Dashboard Tabs */}
@@ -404,7 +581,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 value="tasks"
                                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--brand)] data-[state=active]:bg-transparent data-[state=active]:shadow-none py-3 px-1"
                             >
-                                <FolderKanban className="h-4 w-4 mr-2" /> Pipeline des Tâches
+                                <FolderKanban className="h-4 w-4 mr-2" /> Prestations & Frais
                             </TabsTrigger>
                             <TabsTrigger
                                 value="quotes"
@@ -416,7 +593,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 value="documents"
                                 className="rounded-none border-b-2 border-transparent data-[state=active]:border-[var(--brand)] data-[state=active]:bg-transparent data-[state=active]:shadow-none py-3 px-1"
                             >
-                                <FileText className="h-4 w-4 mr-2" /> Documents & Facturation
+                                <FileText className="h-4 w-4 mr-2" /> Documents
                             </TabsTrigger>
                         </TabsList>
                     </div>
@@ -437,13 +614,70 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                     </div>
                                     <div className="space-y-3 flex-1">
                                         <div>
-                                            <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Description</p>
+                                            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Description</p>
                                             <p className="text-sm text-text-primary line-clamp-4">
                                                 {project.description || <span className="italic opacity-50">Aucune description.</span>}
                                             </p>
                                         </div>
+
+                                        {/* Client info */}
+                                        {project.clients && (
+                                            <div>
+                                                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Client</p>
+                                                <div className="space-y-0.5">
+                                                    <p className="text-sm font-medium text-text-primary flex items-center gap-1.5">
+                                                        <User className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                                                        {project.clients.name}
+                                                    </p>
+                                                    {project.clients.email && (
+                                                        <p className="text-xs text-text-muted pl-5">{project.clients.email}</p>
+                                                    )}
+                                                    {project.clients.contact_name && (
+                                                        <p className="text-xs text-text-muted pl-5">Contact : {project.clients.contact_name}</p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Dates */}
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div>
+                                                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Début</p>
+                                                <p className="text-sm font-medium flex items-center gap-1.5">
+                                                    <Calendar className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                                                    {project.start_date
+                                                        ? format(new Date(project.start_date), 'd MMM yyyy', { locale: fr })
+                                                        : <span className="italic text-text-muted opacity-60 text-xs">Non défini</span>}
+                                                </p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Deadline</p>
+                                                {project.end_date ? (() => {
+                                                    const daysLeft = Math.ceil((new Date(project.end_date).getTime() - Date.now()) / 86400000);
+                                                    const isUrgent = daysLeft >= 0 && daysLeft <= 7;
+                                                    const isOverdue = daysLeft < 0;
+                                                    return (
+                                                        <div>
+                                                            <p className={`text-sm font-medium flex items-center gap-1.5 ${isUrgent ? 'text-amber-600' : isOverdue ? 'text-red-600' : 'text-text-primary'}`}>
+                                                                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                                                                {format(new Date(project.end_date), 'd MMM yyyy', { locale: fr })}
+                                                            </p>
+                                                            <p className={`text-[11px] mt-0.5 font-semibold pl-5 ${isUrgent ? 'text-amber-500' : isOverdue ? 'text-red-500' : 'text-text-muted'}`}>
+                                                                {isOverdue ? `En retard de ${Math.abs(daysLeft)}j` : daysLeft === 0 ? "Aujourd'hui !" : `Dans ${daysLeft}j`}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })() : (
+                                                    <p className="text-sm font-medium flex items-center gap-1.5">
+                                                        <Calendar className="h-3.5 w-3.5 text-text-muted shrink-0" />
+                                                        <span className="italic text-text-muted opacity-60 text-xs">Non défini</span>
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
                                         <div>
-                                            <p className="text-[10px] font-semibold text-text-muted uppercase tracking-wider mb-1">Créé le</p>
+                                            <p className="text-[11px] font-semibold text-text-muted uppercase tracking-wider mb-1">Créé le</p>
                                             <p className="text-sm font-medium flex items-center gap-1.5">
                                                 <Calendar className="h-3.5 w-3.5 text-text-muted shrink-0" />
                                                 {format(new Date(project.created_at), 'd MMMM yyyy', { locale: fr })}
@@ -458,31 +692,144 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                     </div>
                                 </div>
 
-                                {/* Card 2 — Ajouter une tâche / prestation */}
-                                <div className="bg-white rounded-xl border border-border p-4 flex flex-col shadow-sm">
-                                    <div className="flex items-center gap-2 mb-3">
-                                        <div className="h-7 w-7 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center shrink-0">
-                                            <CheckSquare className="h-4 w-4 text-amber-600" />
+                                {/* Card 2 — Mini calendrier du projet */}
+                                {(() => {
+                                    // Compute days grid for calCardMonth
+                                    const monthStart = startOfMonth(calCardMonth);
+                                    const monthEnd = endOfMonth(calCardMonth);
+                                    const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+                                    const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+                                    const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+
+                                    // Collect marked dates
+                                    const startD = project.start_date ? parseDateISO(project.start_date) : null;
+                                    const endD = project.end_date ? parseDateISO(project.end_date) : null;
+                                    const dueDates = (tasks ?? [])
+                                        .filter(t => t.due_date && t.status !== 'done')
+                                        .map(t => parseDateISO(t.due_date!));
+                                    const overdueDates = (tasks ?? [])
+                                        .filter(t => t.due_date && t.status !== 'done' && parseDateISO(t.due_date!) < new Date())
+                                        .map(t => parseDateISO(t.due_date!));
+
+                                    const isStart = (d: Date) => startD ? isSameDay(d, startD) : false;
+                                    const isEnd = (d: Date) => endD ? isSameDay(d, endD) : false;
+                                    const hasDue = (d: Date) => dueDates.some(dd => isSameDay(d, dd));
+                                    const isOverdue = (d: Date) => overdueDates.some(dd => isSameDay(d, dd));
+                                    const isToday = (d: Date) => isSameDay(d, new Date());
+
+                                    return (
+                                        <div className="bg-white rounded-xl border border-border p-4 flex flex-col shadow-sm">
+                                            {/* Header */}
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <div className="h-7 w-7 rounded-lg bg-sky-50 border border-sky-100 flex items-center justify-center shrink-0">
+                                                    <Calendar className="h-4 w-4 text-sky-600" />
+                                                </div>
+                                                <h3 className="font-bold text-sm text-text-primary flex-1">Calendrier</h3>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { onOpenChange(false); navigate(`/calendrier?project=${project.id}`); }}
+                                                    className="text-xs text-brand hover:underline font-medium shrink-0"
+                                                >
+                                                    Voir tout →
+                                                </button>
+                                            </div>
+
+                                            {/* Month nav */}
+                                            <div className="flex items-center justify-between mb-2">
+                                                <button type="button" onClick={() => setCalCardMonth(m => subMonths(m, 1))}
+                                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-surface transition-colors text-text-muted hover:text-text-primary">
+                                                    <ChevronLeft className="h-3.5 w-3.5" />
+                                                </button>
+                                                <p className="text-xs font-bold text-text-primary capitalize">
+                                                    {format(calCardMonth, 'MMMM yyyy', { locale: fr })}
+                                                </p>
+                                                <button type="button" onClick={() => setCalCardMonth(m => addMonths(m, 1))}
+                                                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-surface transition-colors text-text-muted hover:text-text-primary">
+                                                    <ChevronRight className="h-3.5 w-3.5" />
+                                                </button>
+                                            </div>
+
+                                            {/* Day labels */}
+                                            <div className="grid grid-cols-7 mb-1">
+                                                {['L','M','M','J','V','S','D'].map((d, i) => (
+                                                    <div key={i} className="text-center text-[9px] font-bold uppercase tracking-wider text-text-muted py-0.5">
+                                                        {d}
+                                                    </div>
+                                                ))}
+                                            </div>
+
+                                            {/* Days grid */}
+                                            <div className="grid grid-cols-7 gap-y-0.5 flex-1">
+                                                {days.map((day, i) => {
+                                                    const inMonth = isSameMonth(day, calCardMonth);
+                                                    const isStartDay = isStart(day);
+                                                    const isEndDay = isEnd(day);
+                                                    const hasDueDay = hasDue(day);
+                                                    const isOverdueDay = isOverdue(day);
+                                                    const isTodayDay = isToday(day);
+
+                                                    let bgClass = '';
+                                                    let textClass = inMonth ? 'text-text-primary' : 'text-text-muted opacity-30';
+                                                    let ring = '';
+
+                                                    if (isStartDay) { bgClass = 'bg-emerald-100'; textClass = 'text-emerald-700 font-bold'; ring = 'ring-1 ring-emerald-400'; }
+                                                    else if (isEndDay) { bgClass = 'bg-red-100'; textClass = 'text-red-700 font-bold'; ring = 'ring-1 ring-red-400'; }
+                                                    else if (isTodayDay) { bgClass = 'bg-brand/10'; textClass = 'text-brand font-bold'; ring = 'ring-1 ring-brand/40'; }
+
+                                                    return (
+                                                        <div key={i} className="flex flex-col items-center py-0.5">
+                                                            <span className={`w-6 h-6 flex items-center justify-center rounded-full text-[11px] transition-colors ${bgClass} ${textClass} ${ring}`}>
+                                                                {format(day, 'd')}
+                                                            </span>
+                                                            {/* Dot for task due date */}
+                                                            {hasDueDay && inMonth && (
+                                                                <span className={`h-1 w-1 rounded-full mt-0.5 ${isOverdueDay ? 'bg-red-400' : 'bg-brand'}`} />
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+
+                                            {/* Legend */}
+                                            <div className="mt-3 pt-3 border-t border-border/60 flex flex-wrap gap-x-3 gap-y-1">
+                                                {startD && (
+                                                    <span className="flex items-center gap-1 text-[11px] text-text-muted">
+                                                        <span className="h-2 w-2 rounded-full bg-emerald-400 shrink-0" />
+                                                        Début
+                                                    </span>
+                                                )}
+                                                {endD && (
+                                                    <span className="flex items-center gap-1 text-[11px] text-text-muted">
+                                                        <span className="h-2 w-2 rounded-full bg-red-400 shrink-0" />
+                                                        Deadline
+                                                    </span>
+                                                )}
+                                                {dueDates.length > 0 && (
+                                                    <span className="flex items-center gap-1 text-[11px] text-text-muted">
+                                                        <span className="h-1.5 w-1.5 rounded-full bg-brand shrink-0" />
+                                                        Tâches ({dueDates.length})
+                                                    </span>
+                                                )}
+                                                {!startD && !endD && dueDates.length === 0 && (
+                                                    <span className="text-[11px] text-text-muted italic">Aucune date définie</span>
+                                                )}
+                                            </div>
+
+                                            {/* Open calendar CTA */}
+                                            <div className="mt-3">
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    className="w-full text-xs text-sky-700 border-sky-200 hover:bg-sky-50"
+                                                    onClick={() => { onOpenChange(false); navigate(`/calendrier?project=${project.id}`); }}
+                                                >
+                                                    <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                                                    Ouvrir le calendrier du projet
+                                                </Button>
+                                            </div>
                                         </div>
-                                        <h3 className="font-bold text-sm text-text-primary">Tâches & Prestations</h3>
-                                    </div>
-                                    <p className="text-xs text-text-muted flex-1">
-                                        Ajoutez une tâche simple ou une prestation facturable directement liée à ce projet.
-                                    </p>
-                                    <div className="mt-auto pt-4 flex gap-2 flex-wrap">
-                                        <Button
-                                            size="sm"
-                                            className="bg-amber-500 hover:bg-amber-600 text-white text-xs"
-                                            onClick={() => setQuickTaskOpen(true)}
-                                        >
-                                            <Plus className="h-3.5 w-3.5 mr-1.5" />
-                                            Tâche / Prestation
-                                        </Button>
-                                        <Button size="sm" variant="outline" onClick={() => setActiveTab('tasks')} className="text-xs">
-                                            Voir les tâches
-                                        </Button>
-                                    </div>
-                                </div>
+                                    );
+                                })()}
 
                                 {/* Card 3 — Portail client */}
                                 <div className="bg-white rounded-xl border border-border p-4 flex flex-col shadow-sm">
@@ -527,65 +874,180 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                     </div>
                                 </div>
 
+
                             </div>
 
-                            {/* Task mini-pipeline below cards */}
-                            {tasks && tasks.length > 0 && (() => {
-                                const todoTasks = tasks.filter(t => t.status === 'todo');
-                                const inProgressTasks = tasks.filter(t => t.status === 'in_progress' || t.status === 'review');
-                                const doneTasks = tasks.filter(t => t.status === 'done');
-                                return (
-                                    <div className="mt-4 bg-white rounded-xl border border-border p-4 shadow-sm">
-                                        <div className="flex items-center justify-between mb-3">
-                                            <h3 className="font-bold text-sm text-text-primary flex items-center gap-2">
-                                                <FolderKanban className="h-4 w-4 text-text-muted" />
-                                                Pipeline des tâches
-                                            </h3>
-                                            <button
-                                                onClick={() => setActiveTab('tasks')}
-                                                className="text-xs text-brand hover:underline font-medium"
-                                            >
-                                                Voir tout ({tasks.length})
-                                            </button>
-                                        </div>
-                                        <div className="grid grid-cols-3 gap-3">
+                            {/* Task pipeline — always visible */}
+                            <div className="mt-4 bg-white rounded-xl border border-border shadow-sm">
+                                {/* Header */}
+                                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                                    <h3 className="font-bold text-sm text-text-primary flex items-center gap-2">
+                                        <FolderKanban className="h-4 w-4 text-text-muted" />
+                                        Prestations & Frais
+                                        {tasks && tasks.length > 0 && (
+                                            <span className="ml-1 px-1.5 py-0.5 rounded-full bg-brand/10 text-brand text-[11px] font-bold">
+                                                {tasks.length}
+                                            </span>
+                                        )}
+                                    </h3>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            size="sm"
+                                            className="h-7 text-xs bg-brand text-white hover:bg-brand-hover"
+                                            onClick={() => setQuickTaskOpen(true)}
+                                        >
+                                            <Plus className="h-3 w-3 mr-1" />
+                                            Nouvelle tâche
+                                        </Button>
+                                        <button
+                                            onClick={() => setActiveTab('tasks')}
+                                            className="text-xs text-brand hover:underline font-medium"
+                                        >
+                                            Voir tout →
+                                        </button>
+                                    </div>
+                                </div>
+
+                                {/* Status columns */}
+                                {(() => {
+                                    const todoTasks = (tasks ?? []).filter(t => t.status === 'todo');
+                                    const inProgressTasks = (tasks ?? []).filter(t => t.status === 'in_progress' || t.status === 'review');
+                                    const doneTasks = (tasks ?? []).filter(t => t.status === 'done');
+                                    const allEmpty = (tasks ?? []).length === 0;
+                                    if (allEmpty) {
+                                        return (
+                                            <div className="py-10 text-center">
+                                                <CheckSquare className="h-8 w-8 text-text-muted opacity-20 mx-auto mb-2" />
+                                                <p className="text-sm text-text-muted">Aucune tâche pour ce projet.</p>
+                                                <button
+                                                    onClick={() => setQuickTaskOpen(true)}
+                                                    className="mt-2 text-xs text-brand hover:underline font-medium"
+                                                >
+                                                    Créer la première tâche
+                                                </button>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div className="grid grid-cols-3 divide-x divide-border">
                                             {[
-                                                { label: 'À faire', items: todoTasks, color: 'text-text-muted', dot: 'bg-gray-300' },
-                                                { label: 'En cours', items: inProgressTasks, color: 'text-blue-700', dot: 'bg-blue-400' },
-                                                { label: 'Terminées', items: doneTasks, color: 'text-emerald-700', dot: 'bg-emerald-400' },
+                                                { label: 'À faire', items: todoTasks, color: 'text-text-muted', dot: 'bg-gray-300', bg: 'bg-gray-50/60' },
+                                                { label: 'En cours', items: inProgressTasks, color: 'text-blue-700', dot: 'bg-blue-400', bg: 'bg-blue-50/40' },
+                                                { label: 'Terminées', items: doneTasks, color: 'text-emerald-700', dot: 'bg-emerald-400', bg: 'bg-emerald-50/30' },
                                             ].map(col => (
-                                                <div key={col.label}>
+                                                <div key={col.label} className={`p-3 ${col.bg}`}>
                                                     <div className="flex items-center gap-1.5 mb-2">
                                                         <span className={`h-2 w-2 rounded-full shrink-0 ${col.dot}`} />
-                                                        <p className={`text-[10px] font-bold uppercase tracking-wider ${col.color}`}>
-                                                            {col.label} ({col.items.length})
+                                                        <p className={`text-[11px] font-bold uppercase tracking-wider ${col.color}`}>
+                                                            {col.label}
+                                                            <span className="ml-1 font-normal opacity-70">({col.items.length})</span>
                                                         </p>
                                                     </div>
-                                                    <div className="space-y-1">
-                                                        {col.items.slice(0, 3).map(t => (
-                                                            <p key={t.id} className="text-xs text-text-primary truncate bg-surface2/60 rounded px-2 py-1 border border-border/50">
-                                                                {t.title}
-                                                            </p>
-                                                        ))}
-                                                        {col.items.length > 3 && (
-                                                            <p className="text-[10px] text-text-muted pl-2">+{col.items.length - 3} de plus</p>
-                                                        )}
-                                                        {col.items.length === 0 && (
-                                                            <p className="text-[10px] text-text-muted italic pl-2">Aucune</p>
-                                                        )}
+                                                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                                                        {col.items.length === 0 ? (
+                                                            <p className="text-[11px] text-text-muted italic">Aucune</p>
+                                                        ) : col.items.map(t => {
+                                                            const isOverdue = t.due_date && new Date(t.due_date) < new Date() && t.status !== 'done';
+                                                            return (
+                                                                <div
+                                                                    key={t.id}
+                                                                    className="group/chip flex items-start gap-1.5 text-xs rounded-lg px-2 py-1.5 bg-white border border-border/50 hover:border-brand/30 hover:shadow-sm transition-all cursor-pointer"
+                                                                    onClick={() => setActiveTab('tasks')}
+                                                                >
+                                                                    <span className="flex-1 truncate text-text-primary font-medium leading-4">{t.title}</span>
+                                                                    {t.priority === 'high' && (
+                                                                        <span className="shrink-0 h-1.5 w-1.5 rounded-full bg-red-400 mt-1" title="Priorité haute" />
+                                                                    )}
+                                                                    {isOverdue && (
+                                                                        <AlertCircle className="shrink-0 h-3 w-3 text-red-400 mt-0.5" />
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
                                                 </div>
                                             ))}
                                         </div>
-                                    </div>
-                                );
-                            })()}
+                                    );
+                                })()}
+                            </div>
                         </TabsContent>
 
-                        <TabsContent value="tasks" className="m-0 focus-visible:outline-none h-full">
-                            <div className="bg-white rounded-xl border border-border shadow-sm min-h-[500px] overflow-hidden">
-                                <ProjectTaskList projectId={project.id} />
+                        <TabsContent value="tasks" className="m-0 focus-visible:outline-none h-full space-y-3">
+                            {/* Sub-menu: Liste / Gantt + granularité */}
+                            <div className="flex items-center justify-between">
+                                <div style={{ display: 'flex', gap: 4 }}>
+                                    {(['list', 'gantt'] as const).map((v) => (
+                                        <button
+                                            key={v}
+                                            onClick={() => setTasksView(v)}
+                                            style={{
+                                                height: 'var(--h-input-sm)',
+                                                padding: '0 10px',
+                                                background: tasksView === v ? 'var(--p-100)' : 'transparent',
+                                                color: tasksView === v ? 'var(--p-900)' : 'var(--color-text-2)',
+                                                border: '1px solid var(--color-border-2)',
+                                                borderRadius: 'var(--radius-md)',
+                                                fontSize: 'var(--text-11)',
+                                                fontWeight: 500,
+                                                cursor: 'pointer',
+                                                fontFamily: 'inherit',
+                                            }}
+                                        >
+                                            {v === 'list' ? 'Liste' : 'Gantt'}
+                                        </button>
+                                    ))}
+                                </div>
+                                {tasksView === 'gantt' && (
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                        {(['day', 'week', 'month'] as const).map((s) => (
+                                            <button
+                                                key={s}
+                                                onClick={() => setGanttScale(s)}
+                                                style={{
+                                                    height: 'var(--h-input-sm)',
+                                                    padding: '0 10px',
+                                                    background: ganttScale === s ? 'var(--p-100)' : 'transparent',
+                                                    color: ganttScale === s ? 'var(--p-900)' : 'var(--color-text-2)',
+                                                    border: '1px solid var(--color-border-2)',
+                                                    borderRadius: 'var(--radius-md)',
+                                                    fontSize: 'var(--text-11)',
+                                                    fontWeight: 500,
+                                                    cursor: 'pointer',
+                                                    fontFamily: 'inherit',
+                                                }}
+                                            >
+                                                {s === 'day' ? 'Jour' : s === 'week' ? 'Semaine' : 'Mois'}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
+
+                            {facturableTasks.length > 0 && (!quotes || quotes.length === 0) && (
+                                <div className="flex items-center gap-3 rounded-lg border border-brand/20 bg-brand/5 px-4 py-3 text-sm">
+                                    <FileText className="h-4 w-4 text-brand shrink-0" />
+                                    <span className="flex-1 text-text-secondary">
+                                        {facturableTasks.length} prestation{facturableTasks.length > 1 ? 's' : ''} facturable{facturableTasks.length > 1 ? 's' : ''} sans devis.
+                                    </span>
+                                    <Button size="sm" variant="outline" className="h-7 text-xs shrink-0" onClick={() => setActiveTab('quotes')}>
+                                        Créer un devis
+                                    </Button>
+                                </div>
+                            )}
+
+                            {tasksView === 'list' ? (
+                                <div className="bg-white rounded-xl border border-border shadow-sm min-h-[500px] overflow-hidden">
+                                    <ProjectTaskList
+                                        projectId={project.id}
+                                        onTaskCreatedWithDevisData={handleTaskCreatedWithDevisData}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="bg-white rounded-xl border border-border shadow-sm p-4">
+                                    <GanttChart tasks={tasks ?? []} scale={ganttScale} />
+                                </div>
+                            )}
                         </TabsContent>
 
                         <TabsContent value="quotes" className="m-0 focus-visible:outline-none space-y-6">
@@ -595,19 +1057,60 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                     <div>
                                         <h3 className="font-bold text-base text-text-primary">Tâches sélectionnées pour ce devis</h3>
                                         <p className="text-xs text-text-muted mt-0.5">
-                                            Cochez ☑ dans l'onglet <button type="button" onClick={() => setActiveTab('tasks')} className="text-brand hover:underline font-medium">Pipeline des Tâches</button> pour ajouter des prestations ici.
+                                            Créez des tâches via{' '}
+                                            <button type="button" onClick={() => setActiveTab('tasks')} className="text-brand hover:underline font-medium">Prestations & Frais</button>
+                                            {' '}→ "Nouvelle tâche" ou "Depuis le catalogue" pour les ajouter ici.
                                         </p>
                                     </div>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-8 text-xs gap-1 shrink-0 ml-4"
+                                        onClick={() => setImportTasksOpen(true)}
+                                    >
+                                        <Plus className="h-3.5 w-3.5" />
+                                        Importer des tâches
+                                    </Button>
+                                    {selectedTasks.length > 0 && (
+                                        <div className="flex items-center gap-4 shrink-0 ml-4">
+                                            <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                <Switch
+                                                    checked={showTaskDetail}
+                                                    onCheckedChange={v => {
+                                                        setShowTaskDetail(v);
+                                                        if (!v) setShowMaterialPrices(true);
+                                                    }}
+                                                    id="task-detail-toggle"
+                                                />
+                                                <span className="flex items-center gap-1 text-xs text-text-muted whitespace-nowrap">
+                                                    <Layers className="h-3.5 w-3.5" />
+                                                    Annexe détaillée
+                                                </span>
+                                            </label>
+                                            {showTaskDetail && (
+                                                <label className="flex items-center gap-2 cursor-pointer select-none">
+                                                    <Switch
+                                                        checked={showMaterialPrices}
+                                                        onCheckedChange={setShowMaterialPrices}
+                                                        id="material-prices-toggle"
+                                                    />
+                                                    <span className="text-xs text-text-muted whitespace-nowrap">
+                                                        Prix dans l'annexe
+                                                    </span>
+                                                </label>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
 
                                 {selectedTasks.length === 0 ? (
                                     <div className="py-10 text-center border-2 border-dashed border-border rounded-xl bg-surface/50">
                                         <CheckSquare className="h-8 w-8 text-text-muted opacity-20 mx-auto mb-2" />
-                                        <p className="font-medium text-text-primary text-sm mb-1">Aucune tâche sélectionnée</p>
+                                        <p className="font-medium text-text-primary text-sm mb-1">Aucune prestation dans le devis</p>
                                         <p className="text-xs text-text-muted">
-                                            Cochez des tâches dans l'onglet{' '}
-                                            <button type="button" onClick={() => setActiveTab('tasks')} className="text-brand hover:underline font-medium">Pipeline des Tâches</button>
-                                            {' '}pour les ajouter ici.
+                                            Dans l'onglet{' '}
+                                            <button type="button" onClick={() => setActiveTab('tasks')} className="text-brand hover:underline font-medium">Prestations & Frais</button>
+                                            , cliquez sur "Nouvelle tâche" ou "Depuis le catalogue" et renseignez un prix.
                                         </p>
                                     </div>
                                 ) : (
@@ -620,16 +1123,27 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                         <th className="pb-2 text-xs font-semibold text-text-muted w-16 text-center">Qté</th>
                                                         <th className="pb-2 text-xs font-semibold text-text-muted w-28 text-right">Prix unit. HT</th>
                                                         <th className="pb-2 text-xs font-semibold text-text-muted w-24 text-right">Total HT</th>
-                                                        <th className="pb-2 text-xs font-semibold text-text-muted w-12 text-right">TVA</th>
+                                                        <th className="pb-2 text-xs font-semibold text-text-muted w-32 text-right">TVA</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-border/50">
                                                     {selectedTasks.map(t => {
                                                         const lv = getTaskLine(t);
                                                         const totalHT = lv.qty * (parseFloat(lv.price) || 0);
+                                                        const matCount = showTaskDetail
+                                                            ? (taskMateriauDetails ?? []).filter(m => m.task_id === t.id).length
+                                                            : 0;
                                                         return (
                                                             <tr key={t.id} className="hover:bg-surface/50">
-                                                                <td className="py-2 pr-3 font-medium text-text-primary">{t.title}</td>
+                                                                <td className="py-2 pr-3">
+                                                                    <p className="font-medium text-text-primary leading-tight">{t.title}</p>
+                                                                    {showTaskDetail && (
+                                                                        <p className="text-[11px] text-text-muted mt-0.5 flex items-center gap-1">
+                                                                            <Layers className="h-3 w-3" />
+                                                                            Annexe : MO{matCount > 0 ? ` + ${matCount} élément${matCount > 1 ? 's' : ''}` : ''}
+                                                                        </p>
+                                                                    )}
+                                                                </td>
                                                                 <td className="py-2 text-center">
                                                                     <input
                                                                         type="number"
@@ -661,7 +1175,23 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                                 <td className="py-2 text-right text-xs font-semibold text-text-primary">
                                                                     {totalHT.toFixed(2)} €
                                                                 </td>
-                                                                <td className="py-2 text-right text-xs text-text-muted">20%</td>
+                                                                <td className="py-2 text-right">
+                                                                    <select
+                                                                        value={lv.tvaRate ?? 20}
+                                                                        onChange={e => setTaskLineOverrides(prev => ({
+                                                                            ...prev,
+                                                                            [t.id]: { ...getTaskLine(t), tvaRate: parseFloat(e.target.value) }
+                                                                        }))}
+                                                                        className="h-7 text-xs rounded border border-border bg-white focus:outline-none focus:ring-1 focus:ring-brand/40 px-1 pr-6 text-right"
+                                                                    >
+                                                                        <option value="20">20%</option>
+                                                                        <option value="10">10%</option>
+                                                                        <option value="5.5">5,5%</option>
+                                                                        <option value="2.1">2,1%</option>
+                                                                        <option value="0">0%</option>
+                                                                        <option value="-1">Exonéré</option>
+                                                                    </select>
+                                                                </td>
                                                             </tr>
                                                         );
                                                     })}
@@ -675,7 +1205,12 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                 const lv = getTaskLine(t);
                                                 return sum + lv.qty * (parseFloat(lv.price) || 0);
                                             }, 0);
-                                            const tva = totalHT * 0.20;
+                                            const totalTVA = selectedTasks.reduce((sum, t) => {
+                                                const lv = getTaskLine(t);
+                                                const lineHT = lv.qty * (parseFloat(lv.price) || 0);
+                                                const rate = lv.tvaRate ?? 20;
+                                                return sum + (rate > 0 ? lineHT * (rate / 100) : 0);
+                                            }, 0);
                                             return (
                                                 <div className="mt-4 pt-3 border-t border-border space-y-1 text-right text-sm">
                                                     <div className="flex justify-end gap-8">
@@ -683,12 +1218,12 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                         <span className="font-semibold w-24">{totalHT.toFixed(2)} €</span>
                                                     </div>
                                                     <div className="flex justify-end gap-8">
-                                                        <span className="text-text-muted">TVA (20%)</span>
-                                                        <span className="w-24">{tva.toFixed(2)} €</span>
+                                                        <span className="text-text-muted">TVA</span>
+                                                        <span className="w-24">{totalTVA.toFixed(2)} €</span>
                                                     </div>
                                                     <div className="flex justify-end gap-8 text-base font-bold border-t border-border pt-2 mt-1">
                                                         <span>Total TTC</span>
-                                                        <span className="w-24">{(totalHT + tva).toFixed(2)} €</span>
+                                                        <span className="w-24">{(totalHT + totalTVA).toFixed(2)} €</span>
                                                     </div>
                                                 </div>
                                             );
@@ -735,10 +1270,15 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                             const totals = calcQuoteTotals(ql);
                                             const qd: QuoteData = {
                                                 id: q.id,
+                                                reference: q.reference ?? undefined,
                                                 title: q.title,
                                                 projectId: q.project_id,
+                                                clientName: project?.clients?.name ?? undefined,
+                                                clientAddress: project?.clients?.address ?? undefined,
+                                                clientEmail: project?.clients?.email ?? undefined,
                                                 lines: ql,
                                                 notes: q.notes ?? '',
+                                                status: q.status ?? undefined,
                                                 version: q.version ?? 1,
                                                 created_at: q.created_at,
                                             };
@@ -816,6 +1356,35 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                                     Signer
                                                                 </Button>
                                                             )}
+                                                            {q.status !== 'archived' && (() => {
+                                                                const factureExistante = facturesDuProjet?.find(f => f.devis_id === q.id);
+                                                                if (factureExistante) {
+                                                                    return (
+                                                                        <button
+                                                                            type="button"
+                                                                            onClick={() => navigate(`/factures/${factureExistante.id}`)}
+                                                                            className="inline-flex items-center gap-1 h-8 px-2.5 text-xs font-semibold rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+                                                                        >
+                                                                            <Receipt className="h-3.5 w-3.5" />
+                                                                            {factureExistante.numero_facture ?? 'Facturé'} ✓
+                                                                        </button>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        disabled={convertingQuoteId === q.id}
+                                                                        onClick={() => handleConvertirEnFacture(q.id)}
+                                                                        className="h-8 text-xs font-semibold text-emerald-700 border-emerald-200 hover:bg-emerald-50"
+                                                                    >
+                                                                        {convertingQuoteId === q.id
+                                                                            ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                                                                            : <Receipt className="h-3.5 w-3.5 mr-1" />}
+                                                                        Facturer
+                                                                    </Button>
+                                                                );
+                                                            })()}
                                                             {q.status !== 'archived' && (
                                                                 <Button
                                                                     size="sm"
@@ -841,6 +1410,69 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                     </div>
                                 )}
                             </div>
+
+                            {/* Factures liées au projet */}
+                            {facturesDuProjet && facturesDuProjet.length > 0 && (
+                                <div className="bg-white rounded-xl border border-border shadow-sm p-6">
+                                    <div className="flex items-center gap-2 mb-4 border-b border-border pb-4">
+                                        <div className="h-7 w-7 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center shrink-0">
+                                            <Receipt className="h-4 w-4 text-emerald-600" />
+                                        </div>
+                                        <div>
+                                            <h3 className="font-bold text-sm text-text-primary">Factures liées à ce projet</h3>
+                                            <p className="text-xs text-text-muted mt-0.5">{facturesDuProjet.length} facture{facturesDuProjet.length > 1 ? 's' : ''}</p>
+                                        </div>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead>
+                                                <tr className="border-b border-border text-left">
+                                                    <th className="pb-2 text-xs font-semibold text-text-muted">Numéro</th>
+                                                    <th className="pb-2 text-xs font-semibold text-text-muted">Date</th>
+                                                    <th className="pb-2 text-xs font-semibold text-text-muted text-right">Montant TTC</th>
+                                                    <th className="pb-2 text-xs font-semibold text-text-muted text-center">Statut</th>
+                                                    <th className="pb-2 w-8" />
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-border/50">
+                                                {facturesDuProjet.map((f: Facture) => (
+                                                    <tr
+                                                        key={f.id}
+                                                        className="hover:bg-surface/50 cursor-pointer"
+                                                        onClick={() => navigate(`/factures/${f.id}`)}
+                                                    >
+                                                        <td className="py-2 pr-3">
+                                                            <span className="font-mono font-bold text-xs text-text-primary">{f.numero_facture || '—'}</span>
+                                                        </td>
+                                                        <td className="py-2 pr-3 text-xs text-text-secondary">
+                                                            {f.date_emission ? format(new Date(f.date_emission), 'dd/MM/yyyy', { locale: fr }) : '—'}
+                                                        </td>
+                                                        <td className="py-2 pr-3 text-right text-xs font-bold text-text-primary">
+                                                            {f.total_ttc.toFixed(2)} €
+                                                        </td>
+                                                        <td className="py-2 text-center">
+                                                            <span className={`inline-flex items-center text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                                                                f.statut === 'payee' ? 'bg-green-50 text-green-700 border border-green-200' :
+                                                                f.statut === 'en_retard' ? 'bg-red-50 text-red-700 border border-red-200' :
+                                                                f.statut === 'envoyee' ? 'bg-blue-50 text-blue-700 border border-blue-200' :
+                                                                'bg-surface text-text-muted border border-border'
+                                                            }`}>
+                                                                {f.statut === 'payee' ? 'Payée' :
+                                                                 f.statut === 'en_retard' ? 'En retard' :
+                                                                 f.statut === 'envoyee' ? 'Envoyée' :
+                                                                 f.statut === 'annulee' ? 'Annulée' : 'Brouillon'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-2">
+                                                            <ChevronRight className="h-3.5 w-3.5 text-text-muted" />
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            )}
 
                             {/* FIX 7: Version confirmation dialog */}
                             <Dialog open={!!versionConfirmQuote} onOpenChange={(open) => !open && setVersionConfirmQuote(null)}>
@@ -882,6 +1514,52 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 onConfirm={handleSendQuoteToFirma}
                             />
 
+                            {/* ── Generate-quote preview dialog (before save) ── */}
+                            {quoteGeneratePreview && (() => {
+                                const totals = calcQuoteTotals(quoteGeneratePreview.lines);
+                                return (
+                                    <Dialog open={!!quoteGeneratePreview} onOpenChange={(open) => !open && setQuoteGeneratePreview(null)}>
+                                        <DialogContent showCloseButton={false} className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
+                                            <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0 gap-4">
+                                                <div className="min-w-0">
+                                                    <DialogTitle className="font-bold text-base text-text-primary truncate">
+                                                        Aperçu — {quoteGeneratePreview.title}
+                                                    </DialogTitle>
+                                                    <p className="text-xs text-text-muted mt-0.5">Vérifiez le devis avant de l'enregistrer.</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setQuoteGeneratePreview(null)}
+                                                        className="text-text-muted"
+                                                    >
+                                                        Annuler
+                                                    </Button>
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={handleConfirmSaveQuote}
+                                                        disabled={saveQuote.isPending}
+                                                        className="bg-brand text-white hover:bg-brand-hover"
+                                                    >
+                                                        {saveQuote.isPending
+                                                            ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                                                            : <FileText className="h-3.5 w-3.5 mr-1.5" />
+                                                        }
+                                                        Enregistrer ce devis
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="flex-1 min-h-0">
+                                                <PDFViewer width="100%" height="100%" style={{ border: 'none' }}>
+                                                    <QuotePDFDocument data={quoteGeneratePreview} totals={totals} profile={profile ?? null} />
+                                                </PDFViewer>
+                                            </div>
+                                        </DialogContent>
+                                    </Dialog>
+                                );
+                            })()}
+
                             {/* Quote PDF preview dialog */}
                             {quotePreviewTarget && (() => {
                                 const ql: QuoteLine[] = Array.isArray(quotePreviewTarget.lines) ? (quotePreviewTarget.lines as QuoteLine[]) : [];
@@ -889,16 +1567,23 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 const qd: QuoteData = { id: quotePreviewTarget.id, title: quotePreviewTarget.title, projectId: quotePreviewTarget.project_id, lines: ql, notes: quotePreviewTarget.notes ?? '', version: quotePreviewTarget.version ?? 1, created_at: quotePreviewTarget.created_at };
                                 return (
                                     <Dialog open={!!quotePreviewTarget} onOpenChange={(open) => !open && setQuotePreviewTarget(null)}>
-                                        <DialogContent className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
-                                            <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-                                                <DialogTitle className="font-serif text-lg truncate pr-4">{quotePreviewTarget.title} v{quotePreviewTarget.version ?? 1}</DialogTitle>
-                                                <PDFDownloadLink
-                                                    document={<QuotePDFDocument data={qd} totals={qt} profile={profile ?? null} />}
-                                                    fileName={generateDocumentName('Devis', project.clients?.name || 'CLIENT', quotePreviewTarget.created_at || new Date().toISOString(), quotePreviewTarget.version ?? 1)}
-                                                    className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary shrink-0"
-                                                >
-                                                    {({ loading }) => (<>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Télécharger PDF</>)}
-                                                </PDFDownloadLink>
+                                        <DialogContent showCloseButton={false} className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
+                                            <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0 gap-3">
+                                                <DialogTitle className="font-serif text-lg truncate min-w-0">{quotePreviewTarget.title} v{quotePreviewTarget.version ?? 1}</DialogTitle>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <PDFDownloadLink
+                                                        document={<QuotePDFDocument data={qd} totals={qt} profile={profile ?? null} />}
+                                                        fileName={generateDocumentName('Devis', project.clients?.name || 'CLIENT', quotePreviewTarget.created_at || new Date().toISOString(), quotePreviewTarget.version ?? 1)}
+                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary"
+                                                    >
+                                                        {({ loading }) => (<>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Télécharger PDF</>)}
+                                                    </PDFDownloadLink>
+                                                    <DialogClose asChild>
+                                                        <Button variant="outline" size="sm" className="h-8 px-3 gap-1.5 text-xs">
+                                                            <X className="h-3.5 w-3.5" /> Fermer
+                                                        </Button>
+                                                    </DialogClose>
+                                                </div>
                                             </div>
                                             <div className="flex-1 min-h-0">
                                                 <PDFViewer width="100%" height="100%" style={{ border: 'none' }}>
@@ -916,14 +1601,14 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                 <div className="flex items-center justify-between mb-8 border-b border-border pb-4">
                                     <div>
                                         <h3 className="font-bold text-lg text-text-primary">Pipeline Documentaire</h3>
-                                        <p className="text-sm text-text-muted">Retrouvez l'historique légal et financier lié à ce projet.</p>
+                                        <p className="text-sm text-text-muted">Retrouvez l'historique documentaire et financier lié à ce projet.</p>
                                     </div>
                                     <div className="flex gap-2">
                                         <Button variant="outline" size="sm" onClick={() => setActiveTab('quotes')} className="text-orange-600 border-orange-200 hover:bg-orange-50">
                                             <Plus className="h-4 w-4 mr-1" /> Devis / Facture
                                         </Button>
                                         <Button variant="outline" size="sm" onClick={onOpenContracts} className="text-indigo-600 border-indigo-200 hover:bg-indigo-50">
-                                            <Plus className="h-4 w-4 mr-1" /> Contrat Légal
+                                            <Plus className="h-4 w-4 mr-1" /> Document
                                         </Button>
                                     </div>
                                 </div>
@@ -940,7 +1625,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                         </div>
                                         <h4 className="font-bold text-text-primary mb-2">Aucun document généré</h4>
                                         <p className="text-sm text-text-muted max-w-sm mx-auto mb-6">
-                                            Commencez par générer un devis ou un contrat légal pour structurer la mission.
+                                            Commencez par générer un devis ou un document pour structurer la mission.
                                         </p>
                                     </div>
                                 ) : (
@@ -968,7 +1653,7 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                                                                     <Calendar className="h-3 w-3" />
                                                                     {doc.date ? format(new Date(doc.date), 'dd/MM/yyyy HH:mm', { locale: fr }) : 'Non daté'}
                                                                 </span>
-                                                                <span className="capitalize opacity-60">• {doc.type === 'quote' ? 'Devis' : doc.type === 'contract' ? 'Contrat' : 'Facture'}</span>
+                                                                <span className="capitalize opacity-60">• {doc.type === 'quote' ? 'Devis' : doc.type === 'contract' ? 'Document' : 'Facture'}</span>
                                                             </div>
                                                         </div>
 
@@ -1018,12 +1703,13 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                 </Tabs>
             </DialogContent>
 
-            {/* Quick Task Popup */}
+            {/* Unified task creation dialog */}
             {project && (
-                <QuickTaskPopup
+                <TaskCreateDialog
                     open={quickTaskOpen}
                     onOpenChange={setQuickTaskOpen}
                     projectId={project.id}
+                    onCreated={handleTaskCreatedWithDevisData}
                 />
             )}
 
@@ -1038,20 +1724,38 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
                 />
             )}
 
+            {/* Import tâches facturables dans le devis */}
+            {project && (
+                <ImportTasksModal
+                    open={importTasksOpen}
+                    onOpenChange={setImportTasksOpen}
+                    projectId={project.id}
+                    alreadySelected={selectedTasks.map(t => t.id)}
+                    onImport={handleImportTasks}
+                />
+            )}
+
             {/* Contract PDF preview dialog */}
             <Dialog open={!!previewContract} onOpenChange={(open) => !open && setPreviewContract(null)}>
-                <DialogContent className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
-                    <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-                        <DialogTitle className="font-serif text-lg truncate pr-4">{previewContract?.title}</DialogTitle>
-                        {previewContract && (
-                            <PDFDownloadLink
-                                document={<ContractPDFDocument contract={previewContract} profile={profile ?? null} clientName={project?.clients?.name} />}
-                                fileName={generateDocumentName('Contrat-prestation', project?.clients?.name || 'CLIENT', previewContract.created_at, previewContract.version ?? 1)}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary shrink-0"
-                            >
-                                {({ loading }) => (<>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Télécharger PDF</>)}
-                            </PDFDownloadLink>
-                        )}
+                <DialogContent showCloseButton={false} className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
+                    <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0 gap-3">
+                        <DialogTitle className="font-serif text-lg truncate min-w-0">{previewContract?.title}</DialogTitle>
+                        <div className="flex items-center gap-2 shrink-0">
+                            {previewContract && (
+                                <PDFDownloadLink
+                                    document={<ContractPDFDocument contract={previewContract} profile={profile ?? null} clientName={project?.clients?.name} />}
+                                    fileName={generateDocumentName('Document-prestation', project?.clients?.name || 'CLIENT', previewContract.created_at, previewContract.version ?? 1)}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary"
+                                >
+                                    {({ loading }) => (<>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Télécharger PDF</>)}
+                                </PDFDownloadLink>
+                            )}
+                            <DialogClose asChild>
+                                <Button variant="outline" size="sm" className="h-8 px-3 gap-1.5 text-xs">
+                                    <X className="h-3.5 w-3.5" /> Fermer
+                                </Button>
+                            </DialogClose>
+                        </div>
                     </div>
                     <div className="flex-1 min-h-0">
                         {previewContract && (
@@ -1065,20 +1769,27 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
 
             {/* Invoice PDF preview dialog */}
             <Dialog open={!!previewInvoice} onOpenChange={(open) => !open && setPreviewInvoice(null)}>
-                <DialogContent className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
-                    <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
-                        <DialogTitle className="font-serif text-lg truncate pr-4">
+                <DialogContent showCloseButton={false} className="sm:max-w-[95vw] w-[95vw] h-[95vh] max-h-[95vh] p-0 flex flex-col bg-white border-border">
+                    <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0 gap-3">
+                        <DialogTitle className="font-serif text-lg truncate min-w-0">
                             {previewInvoice ? (previewInvoice.notes ? `Facture — ${previewInvoice.notes}` : 'Facture') : ''}
                         </DialogTitle>
-                        {previewInvoice && (
-                            <PDFDownloadLink
-                                document={<InvoicePDFDocument invoice={previewInvoice} profile={profile ?? null} />}
-                                fileName={generateDocumentName('Facture', project?.clients?.name || 'CLIENT', previewInvoice.created_at, 1)}
-                                className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary shrink-0"
-                            >
-                                {({ loading }) => (<>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Télécharger PDF</>)}
-                            </PDFDownloadLink>
-                        )}
+                        <div className="flex items-center gap-2 shrink-0">
+                            {previewInvoice && (
+                                <PDFDownloadLink
+                                    document={<InvoicePDFDocument invoice={previewInvoice} profile={profile ?? null} />}
+                                    fileName={generateDocumentName('Facture', project?.clients?.name || 'CLIENT', previewInvoice.created_at, 1)}
+                                    className="inline-flex items-center gap-1.5 text-xs font-semibold h-8 px-3 rounded-md border border-border bg-white hover:bg-surface transition-colors text-text-secondary"
+                                >
+                                    {({ loading }) => (<>{loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />} Télécharger PDF</>)}
+                                </PDFDownloadLink>
+                            )}
+                            <DialogClose asChild>
+                                <Button variant="outline" size="sm" className="h-8 px-3 gap-1.5 text-xs">
+                                    <X className="h-3.5 w-3.5" /> Fermer
+                                </Button>
+                            </DialogClose>
+                        </div>
                     </div>
                     <div className="flex-1 min-h-0">
                         {previewInvoice && (
@@ -1091,5 +1802,12 @@ export function ProjectDashboardModal({ open, onOpenChange, project, onEdit, onO
             </Dialog>
 
         </Dialog>
+
+        <GenerateDocumentSheet
+            open={generateDocOpen}
+            onOpenChange={setGenerateDocOpen}
+            project={project}
+        />
+        </>
     );
 }
